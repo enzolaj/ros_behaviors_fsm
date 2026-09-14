@@ -1,4 +1,3 @@
-
 import math
  
 import rclpy
@@ -6,9 +5,10 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
  
-
-class DriveSquareBehavior:
+class DriveSquareNode(Node):
+ 
     def __init__(self):
+        super().__init__("drive_square")
         self.forward_speed = .3
         self.turn_speed = .6
         self.phase = "DRIVE"        # "DRIVE" or "TURN"
@@ -17,6 +17,11 @@ class DriveSquareBehavior:
         self.drive_duration = 3 #seconds
         self.turn_duration = 2.7 #seconds
         self.pause_duration = .5
+
+        self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
+ 
+        # Timer: fires 10x per second. This is our control loop.
+        self.timer = self.create_timer(0.1, self.run_loop)
  
     def reset(self, now):
         self.phase = "DRIVE"
@@ -27,7 +32,6 @@ class DriveSquareBehavior:
         return self.corners_turned >= 4
  
     def compute_command(self, now):
-
         cmd = Twist()
  
         if self.phase_start_time is None:
@@ -52,26 +56,13 @@ class DriveSquareBehavior:
                 cmd.angular.z = self.turn_speed
         return cmd
 
- 
- 
-class DriveSquareNode(Node):
- 
-    def __init__(self):
-        super().__init__("drive_square")
-        self.behavior = DriveSquareBehavior()
-
-        self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
- 
-        # Timer: fires 10x per second. This is our control loop.
-        self.timer = self.create_timer(0.1, self.run_loop)
- 
     def run_loop(self):
         now = self.get_clock().now().nanoseconds / 1e9
  
-        cmd = self.behavior.compute_command(now)
+        cmd = self.compute_command(now)
         self.cmd_vel_pub.publish(cmd)
  
-        if self.behavior.is_finished():
+        if self.is_finished():
             self.cmd_vel_pub.publish(Twist())   # zeros
             self.timer.cancel()
             # lol 

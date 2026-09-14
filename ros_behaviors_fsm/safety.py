@@ -9,15 +9,11 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from neato2_interfaces.msg import Bump
 from rclpy.duration import Duration
-from ros_behaviors_fsm.collision_avoidance import (
-    CollisionAvoidanceBehavior,
-)
 
 class SafetyNode(Node):
     TIMEOUT = Duration(seconds=1.0)
     def __init__(self):
         super().__init__('safety_node')
-        self.check_block = CollisionAvoidanceBehavior()
         self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
         self.create_subscription(Twist, "desired_cmd_vel", self.desired_cmd_vel_callback, 10)
         self.create_subscription(LaserScan, "scan", self.scan_callback, 10)
@@ -35,10 +31,7 @@ class SafetyNode(Node):
 
     def desired_cmd_vel_callback(self, msg):
         self.last_desired_vel_time = self.get_clock().now()
-        if self.check_block.is_blocked(self.latest_ranges, self.hit_bump):
-            self.cmd_vel_pub.publish(Twist())
-        else:
-            self.cmd_vel_pub.publish(msg)
+        self.cmd_vel_pub.publish(msg)
 
     def timecheck(self):
         if self.last_desired_vel_time is None:
@@ -62,4 +55,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-    
