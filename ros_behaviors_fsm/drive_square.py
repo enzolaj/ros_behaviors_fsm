@@ -1,44 +1,55 @@
 import math
- 
+
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
- 
+from std_msgs.msg import String
+
 class DriveSquareNode(Node):
- 
+
     def __init__(self):
         super().__init__("drive_square")
-        self.forward_speed = .3
-        self.turn_speed = .6
-        self.phase = "DRIVE"        # "DRIVE" or "TURN"
+        self.forward_speed = 0.3
+        self.turn_speed = 0.6
+        self.phase = "DRIVE"  # "DRIVE" or "TURN"
         self.phase_start_time = None
-        self.corners_turned = 0
-        self.drive_duration = 3 #seconds
-        self.turn_duration = 2.7 #seconds
-        self.pause_duration = .5
+        self.drive_duration = 3  # seconds
+        self.turn_duration = 2.7  # seconds
+        self.pause_duration = 0.5
+
+        # Track active behavior state
+        self.is_active = False
 
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
- 
+        self.state_sub = self.create_subscription(
+            String, "state", self.state_callback, 10
+        )
+
         # Timer: fires 10x per second. This is our control loop.
         self.timer = self.create_timer(0.1, self.run_loop)
- 
+
+    def state_callback(self, msg):
+        was_active = self.is_active
+        self.is_active = msg.data == "SQUARE_DRIVE"
+
+        # If we just switched into SQUARE_DRIVE, reset starting time
+        if self.is_active and not was_active:
+            now = self.get_clock().now().nanoseconds / 1e9
+            self.reset(now)
+
     def reset(self, now):
         self.phase = "DRIVE"
         self.phase_start_time = now
-        self.corners_turned = 0
- 
-    def is_finished(self):
-        return self.corners_turned >= 4
- 
+
     def compute_command(self, now):
         cmd = Twist()
- 
+
         if self.phase_start_time is None:
             self.reset(now)
- 
+
         elapsed = now - self.phase_start_time
- 
+
         if self.phase == "DRIVE":
             if elapsed > self.drive_duration:
                 self.phase = "TURN"
@@ -50,25 +61,21 @@ class DriveSquareNode(Node):
             if elapsed > self.turn_duration:
                 self.phase = "DRIVE"
                 self.phase_start_time = now
-                self.corners_turned += 1
             else:
                 cmd.linear.x = 0.0
                 cmd.angular.z = self.turn_speed
         return cmd
 
     def run_loop(self):
+        # Do not run or publish commands if we are not the active state
+        if not self.is_active:
+            return
+
         now = self.get_clock().now().nanoseconds / 1e9
- 
+
         cmd = self.compute_command(now)
         self.cmd_vel_pub.publish(cmd)
- 
-        if self.is_finished():
-            self.cmd_vel_pub.publish(Twist())   # zeros
-            self.timer.cancel()
-            # lol 
-            self.get_logger().info("Square complete.")
- 
- 
+
 def main(args=None):
     rclpy.init(args=args)
     node = DriveSquareNode()
@@ -80,7 +87,7 @@ def main(args=None):
         node.cmd_vel_pub.publish(Twist())
         node.destroy_node()
         rclpy.shutdown()
- 
- 
+
+
 if __name__ == "__main__":
     main()
