@@ -23,6 +23,7 @@ class CollisionAvoidanceNode(Node):
         self.distance_threshold = 0.5      # meters
         self.obstacle_distance = None      # meters 
         self.forward_speed = 0.3      # m/s
+        self.obstacle_detection_fov = 30 # deg
 
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
         self.scan_sub = self.create_subscription(LaserScan, "scan", self.scan_callback, 10)

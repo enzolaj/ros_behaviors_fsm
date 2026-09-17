@@ -9,6 +9,8 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from neato2_interfaces.msg import Bump
 from rclpy.duration import Duration
+from std_msgs.msg import String
+
 
 class SafetyNode(Node):
     TIMEOUT = Duration(seconds=1.0)
@@ -18,6 +20,9 @@ class SafetyNode(Node):
         self.create_subscription(Twist, "desired_cmd_vel", self.desired_cmd_vel_callback, 10)
         self.create_subscription(LaserScan, "scan", self.scan_callback, 10)
         self.create_subscription(Bump, "bump", self.bump_callback, 10)
+        self.state_sub = self.create_subscription(
+            String, "state", self.state_callback, 10
+        )
         self.latest_ranges = None
         self.hit_bump = False
         self.last_desired_vel_time = None
@@ -37,7 +42,19 @@ class SafetyNode(Node):
         if self.last_desired_vel_time is None:
             return
         if self.get_clock().now() - self.last_desired_vel_time > self.TIMEOUT:
-            self.cmd_vel_pub.publish(Twist())
+            self.stop()
+
+
+    def stop(self):
+        self.cmd_vel_pub.publish(Twist())
+        print("STOPPING")
+
+    def state_callback(self, msg):
+        if msg.data == "STOP":
+            self.stop()
+
+            
+
 
 
 # i was told the other way of cleanup was dangerous by a friend
