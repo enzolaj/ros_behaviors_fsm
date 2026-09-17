@@ -71,9 +71,15 @@ class CollisionAvoidanceNode(Node):
             print("start COLLISION_AVOIDANCE")
 
     def scan_callback(self, msg):
-        """Log the latest obstacle distance straight ahead from the Neato."""
-        self.obstacle_distance = msg.ranges[0]
- 
+        """Log the latest obstacle distance straight ahead from the Neato within the FOV."""
+        if msg is None or msg.ranges is None:
+            self.obstacle_distance = None
+        self.obstacle_distance = msg.ranges[0] # default from straight first
+        for i in range(0, self.obstacle_detection_fov+1):
+            self.obstacle_distance = min(self.obstacle_distance, msg.ranges[i])
+        for i in range(361 - self.obstacle_detection_fov, 361):
+            self.obstacle_distance = min(self.obstacle_distance, msg.ranges[i]) 
+            
     def bump_callback(self, msg):
         """Log the latest bump state."""
         self.bump_hit = bool(msg.left_front or msg.left_side or msg.right_front or msg.right_side)
