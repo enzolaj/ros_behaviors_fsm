@@ -14,6 +14,7 @@ class DriveSquareNode(Node):
         self.turn_speed = 0.6
         self.phase = "DRIVE"  # "DRIVE" or "TURN"
         self.phase_start_time = None
+        # hardcoded, measured by visually testing how long it takes complete 1m driving/90 turning
         self.drive_duration = 3  # seconds
         self.turn_duration = 2.7  # seconds
         self.pause_duration = 0.5
@@ -35,6 +36,7 @@ class DriveSquareNode(Node):
 
         # If we just switched into SQUARE_DRIVE, reset starting time
         if self.is_active and not was_active:
+            print("start SQUARE DRIVING")
             now = self.get_clock().now().nanoseconds / 1e9
             self.reset(now)
 
