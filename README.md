@@ -1,4 +1,4 @@
-# RoboBehaviors and FSM Project
+# Lazy Neato - RoboBehaviors and FSM Project
 Author Names: Jack W., Enzo S., Irene H.
 
 For Olin ENGR3590 Computational Introduction to Robotics
