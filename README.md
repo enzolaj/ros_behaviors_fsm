@@ -1,12 +1,11 @@
-# ros_behaviors_fsm
+Your writeup should answer the following questions:
 
-Repo for the ROS behaviors introductory project for CompRobo
-
-$ ros2 bag record /accel /bump /odom /cmd_vel /scan /stable_scan
-/projected_stable_scan /tf /tf_static -o bag-file-name
-
-
-
+-   For each behavior, describe the problem at a high-level. Include any relevant diagrams that help explain your approach. Discuss your strategy at a high-level and include any design decisions that had to be made to realize a successful implementation.
+-   For the finite state controller, what was the overall behavior? What were the states? What did the robot do in each state? How did you combine behaviors together and how did you detect when to transition between behaviors? Consider including a state transition diagram in your writeup.
+-   How was your code structured? Make sure to include a sufficient detail about the object-oriented structure you used for your project.
+-   What, if any, challenges did you face along the way?
+-   What would you do to improve your project if you had more time?
+-   What are the key takeaways from this assignment for future robotic programming projects? For each takeaway, provide a sentence or two of elaboration.
 
 ===========Jack Work In Progress =====
 
@@ -16,7 +15,13 @@ Author Names: Jack W., Enzo S., Irene H.
 For Olin ENGR3590 Computational Introduction to Robotics
 
 ## Project Overview
-This is where you should provide an overall description of the project, including motivation (you may, for instance, want to link to the original assignment prompt), key design choices you made, and a summary of key takeaways. The rest of this markdown file then contains the specific details about your project.
+The goal of this project is to learn, experiment, and gain overall familiarity with ROS2, Python framework, robotics development cycle as well as debugging tools and practices. As detailed throughout the rest of this writeup, this project includes not only the use of finite state machine patterns, but also a variety of real-life robotic behaviors, such as:
+ - Driving in a square
+ - Collision avoidance/safety protocol
+ - Wall following
+ - Cookie following
+
+All sensors and hardwares used are built in the Neato. No additional hardware or technology is used. But advanced software techniques including RANSAC, shape fitting, line detection, data filtering, and proportional control are adopted and used in practice.
 
 ## Individual Behaviors
 In this section you will provide the details of each individual behavior you created / is part of this repository. At a minimum, you should have an emergency stop, driving in a shape, and wall-following. Any additional behaviors you created as part of your finite-state-machine should also be described here.
