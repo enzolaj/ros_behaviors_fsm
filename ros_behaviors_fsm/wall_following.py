@@ -53,8 +53,15 @@ class WallFollowerNode(Node):
         """Determines if point within sensor's range. False for 0, inf, and NaN."""
         return msg.range_min < range_index < msg.range_max
 
-    
-    def scan_callback(self, msg):
+    def wall_ahead(self, msg):
+        x = msg.ranges[0]
+        if x > self.target_distance:
+            pass
+        else:
+            return True
+
+        
+    def scan_callback(self, msg):            
             cmd = Twist()
             cmd.linear.x = self.forward_speed
 
@@ -79,17 +86,18 @@ class WallFollowerNode(Node):
             current_distance = b * math.cos(alpha)
             
             # find how much we're off from target distance
-            #dist_error = current_distance - self.target_distance
-            
-            # -1 multiplier because the wall is on the right, make not hardcoded later
-            #steer = -1.0 * (self.p_dist * dist_error + self.p_angle * alpha) # still need to have tuned explanation
-
             dist_error = current_distance - self.target_distance
             capped_error = max(-self.max_dist_error, min(self.max_dist_error, dist_error))
+            # -1 multiplier because the wall is on the right, make not hardcoded later
             steer = -1.0 * (self.p_dist * capped_error + self.p_angle * alpha)
 
-            # clamp the turn speed
-            cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
+            # turn if wall ahead (assuming we're following on the right)
+            if self.wall_ahead(msg):
+                cmd.angular.z = 1.0
+            # else, clamp the turn speed
+            else:
+                cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
+
 
             self.cmd_vel_pub.publish(cmd)
 
