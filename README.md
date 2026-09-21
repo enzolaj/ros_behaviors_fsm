@@ -1,14 +1,3 @@
-Your writeup should answer the following questions:
-
--   For each behavior, describe the problem at a high-level. Include any relevant diagrams that help explain your approach. Discuss your strategy at a high-level and include any design decisions that had to be made to realize a successful implementation.
--   For the finite state controller, what was the overall behavior? What were the states? What did the robot do in each state? How did you combine behaviors together and how did you detect when to transition between behaviors? Consider including a state transition diagram in your writeup.
--   How was your code structured? Make sure to include a sufficient detail about the object-oriented structure you used for your project.
--   What, if any, challenges did you face along the way?
--   What would you do to improve your project if you had more time?
--   What are the key takeaways from this assignment for future robotic programming projects? For each takeaway, provide a sentence or two of elaboration.
-
-===========Jack Work In Progress =====
-
 # RoboBehaviors and FSM Project
 Author Names: Jack W., Enzo S., Irene H.
 
@@ -16,23 +5,39 @@ For Olin ENGR3590 Computational Introduction to Robotics
 
 ## Project Overview
 The goal of this project is to learn, experiment, and gain overall familiarity with ROS2, Python framework, robotics development cycle as well as debugging tools and practices. As detailed throughout the rest of this writeup, this project includes not only the use of finite state machine patterns, but also a variety of real-life robotic behaviors, such as:
- - Driving in a square
- - Collision avoidance/safety protocol
- - Wall following
- - Cookie following
+ - [Driving in a square](#driving-in-a-square)
+ - [Collision avoidance/safety protocol](#collision-avoidance)
+ - [Wall following](#wall-following)
+ - [Cookie following](#cookie-following)
 
 All sensors and hardwares used are built in the Neato. No additional hardware or technology is used. But advanced software techniques including RANSAC, shape fitting, line detection, data filtering, and proportional control are adopted and used in practice.
 
 ## Individual Behaviors
 In this section you will provide the details of each individual behavior you created / is part of this repository. At a minimum, you should have an emergency stop, driving in a shape, and wall-following. Any additional behaviors you created as part of your finite-state-machine should also be described here.
 
-### Behavior 1: Name of the Behavior
-This section should be composed of the following:
-* A descriptive paragraph (what is the behavior and its intent).
-* A paragraph of implementation details (what do you subscribe to, what do you publish, is this multi-threaded, did you implement a parameter server, and anything else essential to your implementation). This can include any testing/debugging interfacing you added.
-* A paragraph that summarizes your key design decisions (and justifications, if relevant).
-* A figure, gif, or embedded video demonstrating the behavior, with a link to the relevant `rosbag` in your repository. Any other explanatory visuals (e.g., geometric diagrams, flow charts, etc.) are also welcome.
+### <a name="driving-in-a-square" id="driving-in-a-square"></a>Driving in a Square
+* **Description & Intent:** [High-level description of the square driving behavior and what it intends to accomplish.]
+* **Implementation Details:** [Topics subscribed to, topics published to (e.g., `/cmd_vel`), timer callbacks/threading, odometry/time-based turning strategies, and testing/debugging tools used.]
+* **Key Design Decisions:** [Summary of key architectural decisions, parameters tuned, and technical justifications.]
+* **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the behavior, along with a link to the relevant `rosbag` file.]
 
+### <a name="collision-avoidance" id="collision-avoidance"></a>Collision Avoidance/Safety Protocol
+* **Description & Intent:** [High-level description of the collision avoidance/safety stop protocol and what it intends to accomplish.]
+* **Implementation Details:** [LIDAR/bump sensor subscribers, velocity publishing rules, thresholds, multi-threading or safety overrides, and testing/debugging tools used.]
+* **Key Design Decisions:** [Summary of key architectural decisions, distance margins, fail-safe triggers, and technical justifications.]
+* **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the behavior, along with a link to the relevant `rosbag` file.]
+
+### <a name="wall-following" id="wall-following"></a>Wall Following
+* **Description & Intent:** [High-level description of the wall-following behavior and what it intends to accomplish.]
+* **Implementation Details:** [Laser scan subscribers, line fitting/RANSAC techniques, proportional control (P/PID) loops, velocity publishing, and debugging markers/visualizations.]
+* **Key Design Decisions:** [Target distance from the wall, orientation alignment strategies, corner handling, and technical justifications.]
+* **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the behavior, along with a link to the relevant `rosbag` file.]
+
+### <a name="cookie-following" id="cookie-following"></a>Cookie Following
+* **Description & Intent:** [High-level description of the cookie (or object/target) following behavior and what it intends to accomplish.]
+* **Implementation Details:** [Target detection algorithm (e.g., cluster centroid, circle detection), tracking control loops, subscriber/publisher setup, and debugging tools used.]
+* **Key Design Decisions:** [Distance thresholds, lost-target behavior, speed limits, and technical justifications.]
+* **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the behavior, along with a link to the relevant `rosbag` file.]
 
 ## Finite State Machine
 In this section you will provide a description of your finite state machine including your intent, design decisions, and implementation details.
