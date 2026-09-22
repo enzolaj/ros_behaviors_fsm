@@ -7,10 +7,6 @@ class FiniteStateController(Node):
     def __init__(self):
         super().__init__("finite_state_controller")
         self.state_pub = self.create_publisher(String, "state", 10)
-        # Listens for behavior nodes reporting back state (e.g. SQUARE_DRIVE_DONE)
-        self.state_sub = self.create_subscription(
-            String, "state", self.state_callback, 10
-        )
 
         # by default starts in SQUARE_DRIVE
         self.current_state = "SQUARE_DRIVE"
@@ -30,13 +26,6 @@ class FiniteStateController(Node):
 
         # wait for 1 second before publishing
         startup_timer = self.create_timer(1.0, publish_initial_state)
-
-    def state_callback(self, msg):
-        # Reports coming back from behavior nodes, e.g. drive_square announcing
-        # it finished its one square (as opposed to states this node itself commands).
-        if msg.data == "SQUARE_DRIVE_DONE" and self.current_state != "SQUARE_DRIVE_DONE":
-            self.current_state = "SQUARE_DRIVE_DONE"
-            print("\n>> Square Drive finished one square (SQUARE_DRIVE_DONE)\n")
 
     def print_menu(self):
         print("""

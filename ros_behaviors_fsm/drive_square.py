@@ -52,11 +52,11 @@ class DriveSquareNode(Node):
 
     def finish_square(self):
         """Called once the 4th side's turn is complete. Stops the behavior and
-        announces completion on the state topic."""
+        hands off directly to wall following."""
         self.is_active = False
-        print("SQUARE DRIVE COMPLETE")
+        print("SQUARE DRIVE COMPLETE -> switching to WALL_FOLLOWING")
         msg = String()
-        msg.data = "SQUARE_DRIVE_DONE"
+        msg.data = "WALL_FOLLOWING"
         self.state_pub.publish(msg)
 
     def compute_command(self, now):

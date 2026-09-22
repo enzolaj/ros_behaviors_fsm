@@ -116,5 +116,6 @@ This section should provide someone instructions for downloading, building, and
 running your code and any associated bagfiles.
 
 `ros2 launch neato2_gazebo neato_gauntlet_world.py`
+`ros2 launch neato2_gazebo empty_world.py`
 `colcon build --packages-select ros_behaviors_fsm ` ` source install/setup.bash`
 `ros2 launch ros_behaviors_fsm all_nodes_launch.py`
