@@ -7,11 +7,22 @@ class FiniteStateController(Node):
     def __init__(self):
         super().__init__("finite_state_controller")
         self.state_pub = self.create_publisher(String, "state", 10)
+        # Listens for behavior nodes reporting back state (e.g. SQUARE_DRIVE_DONE)
+        self.state_sub = self.create_subscription(
+            String, "state", self.state_callback, 10
+        )
         self.current_state = "STOP"
 
         # Separate thread so input() doesn't block rclpy.spin()
         self.input_thread = threading.Thread(target=self.terminal_input_loop, daemon=True)
         self.input_thread.start()
+
+    def state_callback(self, msg):
+        # Reports coming back from behavior nodes, e.g. drive_square announcing
+        # it finished its one square (as opposed to states this node itself commands).
+        if msg.data == "SQUARE_DRIVE_DONE" and self.current_state != "SQUARE_DRIVE_DONE":
+            self.current_state = "SQUARE_DRIVE_DONE"
+            print("\n>> Square Drive finished one square (SQUARE_DRIVE_DONE)\n")
 
     def print_menu(self):
         print("""

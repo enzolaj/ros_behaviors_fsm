@@ -19,10 +19,15 @@ class DriveSquareNode(Node):
         self.turn_duration = 2.7  # seconds
         self.pause_duration = 0.5
 
+        # A square has 4 sides; each side is one DRIVE phase + one TURN phase
+        self.sides_completed = 0
+        self.num_sides = 4
+
         # Track active behavior state
         self.is_active = False
 
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
+        self.state_pub = self.create_publisher(String, "state", 10)
         self.state_sub = self.create_subscription(
             String, "state", self.state_callback, 10
         )
@@ -43,6 +48,16 @@ class DriveSquareNode(Node):
     def reset(self, now):
         self.phase = "DRIVE"
         self.phase_start_time = now
+        self.sides_completed = 0
+
+    def finish_square(self):
+        """Called once the 4th side's turn is complete. Stops the behavior and
+        announces completion on the state topic."""
+        self.is_active = False
+        print("SQUARE DRIVE COMPLETE")
+        msg = String()
+        msg.data = "SQUARE_DRIVE_DONE"
+        self.state_pub.publish(msg)
 
     def compute_command(self, now):
         cmd = Twist()
@@ -61,8 +76,13 @@ class DriveSquareNode(Node):
                 cmd.angular.z = 0.0
         elif self.phase == "TURN":
             if elapsed > self.turn_duration:
-                self.phase = "DRIVE"
-                self.phase_start_time = now
+                self.sides_completed += 1
+                if self.sides_completed >= self.num_sides:
+                    self.finish_square()
+                    # cmd stays zero so we stop cleanly on the final side
+                else:
+                    self.phase = "DRIVE"
+                    self.phase_start_time = now
             else:
                 cmd.linear.x = 0.0
                 cmd.angular.z = self.turn_speed
