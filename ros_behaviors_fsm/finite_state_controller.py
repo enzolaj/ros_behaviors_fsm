@@ -11,11 +11,25 @@ class FiniteStateController(Node):
         self.state_sub = self.create_subscription(
             String, "state", self.state_callback, 10
         )
-        self.current_state = "STOP"
+
+        # by default starts in SQUARE_DRIVE
+        self.current_state = "SQUARE_DRIVE"
 
         # Separate thread so input() doesn't block rclpy.spin()
         self.input_thread = threading.Thread(target=self.terminal_input_loop, daemon=True)
         self.input_thread.start()
+
+        # Give other nodes' subscriptions a moment to come up via discovery before
+        # publishing the default starting state, so it isn't published into the void.
+        def publish_initial_state():
+            startup_timer.cancel()
+            msg = String()
+            msg.data = self.current_state
+            self.state_pub.publish(msg)
+            print(f">> Published State: {self.current_state}\n")
+
+        # wait for 1 second before publishing
+        startup_timer = self.create_timer(1.0, publish_initial_state)
 
     def state_callback(self, msg):
         # Reports coming back from behavior nodes, e.g. drive_square announcing
@@ -29,8 +43,8 @@ class FiniteStateController(Node):
 =============================
 Select Behavior State:
 1: Square Drive
-2: Collision Avoidance
-3: Wall Following
+2: Wall Following
+3: Cookie Following
 0: Stop (Idle)
 =============================
 Enter choice: """, end="", flush=True)
@@ -47,9 +61,9 @@ Enter choice: """, end="", flush=True)
             if user_input == "1":
                 new_state = "SQUARE_DRIVE"
             elif user_input == "2":
-                new_state = "COLLISION_AVOIDANCE"
-            elif user_input == "3":
                 new_state = "WALL_FOLLOWING"
+            elif user_input == "3":
+                new_state = "COOKIE_FOLLOW"
             elif user_input == "0":
                 new_state = "STOP"
             else:

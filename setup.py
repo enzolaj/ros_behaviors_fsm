@@ -1,3 +1,6 @@
+import os
+from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = 'ros_behaviors_fsm'
@@ -10,6 +13,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'),
+            glob(os.path.join('launch', '*launch.py'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -25,7 +30,8 @@ setup(
     entry_points={
         'console_scripts': [
             'drive_square = ros_behaviors_fsm.drive_square:main',
-            'collision_avoidance = ros_behaviors_fsm.collision_avoidance:main',
+            'wall_following = ros_behaviors_fsm.wall_following:main',
+            'cookie_follow = ros_behaviors_fsm.cookie_follow:main',
             'finite_state_controller = ros_behaviors_fsm.finite_state_controller:main',
             'safety = ros_behaviors_fsm.safety:main'
         ],
