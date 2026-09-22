@@ -1,12 +1,11 @@
 '''
-will publish to cmd_vel, subscribe to scan, bump, desired_vel
+will publish to cmd_vel, subscribe to bump, desired_vel
 acts as safety gate before finally publishing good vel
 so this will also timeout if there arent any commands coming just in case
 '''
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from sensor_msgs.msg import LaserScan
 from neato2_interfaces.msg import Bump
 from rclpy.duration import Duration
 from std_msgs.msg import String
@@ -18,24 +17,26 @@ class SafetyNode(Node):
         super().__init__('safety_node')
         self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
         self.create_subscription(Twist, "desired_cmd_vel", self.desired_cmd_vel_callback, 10)
-        self.create_subscription(LaserScan, "scan", self.scan_callback, 10)
         self.create_subscription(Bump, "bump", self.bump_callback, 10)
         self.state_sub = self.create_subscription(
             String, "state", self.state_callback, 10
         )
-        self.latest_ranges = None
         self.hit_bump = False
         self.last_desired_vel_time = None
         self.timer = self.create_timer(0.1, self.timecheck)
 
-    def scan_callback(self, msg):
-        self.latest_ranges = msg.ranges
-
     def bump_callback(self, msg):
         self.hit_bump = bool(msg.left_front or msg.left_side or msg.right_front or msg.right_side)
+        if self.hit_bump:
+            self.stop()
 
     def desired_cmd_vel_callback(self, msg):
         self.last_desired_vel_time = self.get_clock().now()
+        # Refuse to pass through motion while a bumper is active, so a behavior
+        # node can't immediately override the e-stop on its next command.
+        if self.hit_bump:
+            self.stop()
+            return
         self.cmd_vel_pub.publish(msg)
 
     def timecheck(self):
