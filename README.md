@@ -40,7 +40,10 @@ In this section you will provide the details of each individual behavior you cre
 * **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the behavior, along with a link to the relevant `rosbag` file.]
 
 ## Finite State Machine
-In this section you will provide a description of your finite state machine including your intent, design decisions, and implementation details.
+Our finite state machine for this project follows the background story as the following:
+
+Meet our lazy Neato: a devoted minimalist who treats doing the absolute bare minimum as a fine art and refuses to overexert himself under any circumstances. Employed to draw as many squares as possible, he clocks in just long enough to complete exactly one square trajectory before he gets too tired. The moment that he completes drawing of exactly one square, he immediately stops working and taking a walk along the wall. He usually walks forever just to avoid working, unless he is motivated by a sweet treat, like a cookie. Whenever he sees a cookie while he is wandering, he will immediately turn his full attention to the treat and run towards it until the cookie is within reach to eat. Once he eats the cookie, he will happily go back to work to draw another square, which will get him tired again immediately afterwards and repeat the cycle.
+
 
 ### Overall Design
 In this section, you will have:
