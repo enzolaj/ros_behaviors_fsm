@@ -8,7 +8,7 @@ from rclpy.qos import qos_profile_sensor_data
 
 from geometry_msgs.msg import Twist, Point, PointStamped
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import ColorRGBA, Float32MultiArray
+from std_msgs.msg import ColorRGBA, Float32MultiArray, String
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener, TransformException
 from tf2_geometry_msgs import do_transform_point
@@ -46,7 +46,19 @@ class WallFollowerNode(Node):
         self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
 
         self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
+        self.state_sub = self.create_subscription(
+            String, "state", self.state_callback, 10
+        )
 
+        # Track active behavior state
+        self.is_active = False
+
+    def state_callback(self, msg):
+        was_active = self.is_active
+        self.is_active = msg.data == "WALL_FOLLOWING"
+
+        if self.is_active and not was_active:
+            print("start WALL_FOLLOWING")
 
     @staticmethod
     def valid_point(range_index, msg):
@@ -61,7 +73,11 @@ class WallFollowerNode(Node):
             return True
 
         
-    def scan_callback(self, msg):            
+    def scan_callback(self, msg):
+            # Do not run or publish commands if we are not the active state
+            if not self.is_active:
+                return
+
             cmd = Twist()
             cmd.linear.x = self.forward_speed
 
