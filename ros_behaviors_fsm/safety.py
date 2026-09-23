@@ -2,6 +2,8 @@
 will publish to cmd_vel, subscribe to bump, desired_vel
 acts as safety gate before finally publishing good vel
 so this will also timeout if there arent any commands coming just in case
+
+this node represents the collision avoidance behavior, and serves as the safety e-stop for the system
 '''
 import rclpy
 from rclpy.node import Node
@@ -12,6 +14,7 @@ from std_msgs.msg import String
 
 
 class SafetyNode(Node):
+    # timeout duration when no commands are sent anymore for a while for any software or communication failure reasons
     TIMEOUT = Duration(seconds=1.0)
     def __init__(self):
         super().__init__('safety_node')
@@ -23,17 +26,17 @@ class SafetyNode(Node):
         )
         self.hit_bump = False
         self.last_desired_vel_time = None
-        self.timer = self.create_timer(0.1, self.timecheck)
+        self.timer = self.create_timer(0.1, self.timecheck) # periodically checks if the commands is idle
 
     def bump_callback(self, msg):
+        # stop if any of the bump is triggered
         self.hit_bump = bool(msg.left_front or msg.left_side or msg.right_front or msg.right_side)
         if self.hit_bump:
             self.stop()
 
     def desired_cmd_vel_callback(self, msg):
         self.last_desired_vel_time = self.get_clock().now()
-        # Refuse to pass through motion while a bumper is active, so a behavior
-        # node can't immediately override the e-stop on its next command.
+        # stop if bumper is triggered currently
         if self.hit_bump:
             self.stop()
             return
@@ -54,17 +57,10 @@ class SafetyNode(Node):
         if msg.data == "STOP":
             self.stop()
         else:
-            # Picking a new behavior state is treated as a manual override/reset:
-            # otherwise a stuck hit_bump latch (e.g. if the bump sensor never
-            # sends a "cleared" message once contact ends) would block motion
-            # forever with no way to recover.
+            # reset the hit bumper status when manually changing states, otherwise this is latched on to be true and nothing will run
             self.hit_bump = False
 
             
-
-
-
-# i was told the other way of cleanup was dangerous by a friend
 def main(args=None):
     rclpy.init(args=args)
     node = SafetyNode()
