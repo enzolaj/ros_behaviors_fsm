@@ -24,7 +24,7 @@ class CookieFollowNode(Node):
         self.radius_tol = 0.03
  
         # inlier tolerance, lower = more restrictive but miss circle, higher = wall can be circle
-        self.inlier_tol = 0.02
+        self.inlier_tol = 0.03
  
         # iterations for the ransac algorithm
         self.ransac_iterations = 200
@@ -64,7 +64,7 @@ class CookieFollowNode(Node):
         # ransac flickers sometimes, so only call the cookie lost after a few empty scans in a row
         # 5 Hz scan rate = 5 misses is about 1 s
         self.miss_count = 0
-        self.max_misses = 5
+        self.max_misses = 10
 
         # publishers for control
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)

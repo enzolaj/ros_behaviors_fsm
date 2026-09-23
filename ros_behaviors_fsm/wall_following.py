@@ -43,7 +43,7 @@ class WallFollowerNode(Node):
         # [dist_error, alpha, steer_before_clamp] for plotting from a bag
         self.debug_pub = self.create_publisher(Float32MultiArray, "wall_debug", 10)
 
-        self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
 
         self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
         self.state_sub = self.create_subscription(
@@ -67,7 +67,7 @@ class WallFollowerNode(Node):
 
     def wall_ahead(self, msg):
         x = msg.ranges[0]
-        if x > 3 * self.target_distance:
+        if x > 4 * self.target_distance:
             pass
         else:
             return True
