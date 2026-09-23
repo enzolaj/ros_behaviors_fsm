@@ -55,7 +55,7 @@ class FiniteStateController(Node):
     def cookies_eaten_callback(self, msg):
         # the call back does not need to use the data, but just to keep the number for future reference
         if self.current_state == "COOKIE_FOLLOW":
-            self.set_state("DRIVE_SQUARE")
+            self.set_state("SQUARE_DRIVE")
 
     # menu for manual control of the state
     def print_menu(self):
