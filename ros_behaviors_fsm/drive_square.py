@@ -12,7 +12,8 @@ class DriveSquareNode(Node):
         super().__init__("drive_square")
         self.forward_speed = 0.3
         self.turn_speed = 0.6
-        self.phase = "DRIVE"  # "DRIVE" or "TURN"
+        # start with TURN isntead of DRIVE so won't hit the cookie once eaten
+        self.phase = "TURN"  # "DRIVE" or "TURN"
         self.phase_start_time = None
         # hardcoded, measured by visually testing how long it takes complete 1m driving/90 turning
         self.drive_duration = 3  # seconds
@@ -46,7 +47,7 @@ class DriveSquareNode(Node):
             self.reset(now)
 
     def reset(self, now):
-        self.phase = "DRIVE"
+        self.phase = "TURN"
         self.phase_start_time = now
         self.sides_completed = 0
 
