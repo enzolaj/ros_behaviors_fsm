@@ -20,8 +20,8 @@ class DriveSquareNode(Node):
         self.turn_duration = 2.7  # seconds
         self.pause_duration = 0.5
 
-        # A square has 4 sides; each side is one DRIVE phase + one TURN phase
-        self.sides_completed = 0
+        # A square has 4 sides and corners to turn; each side is one DRIVE phase + one TURN phase
+        self.turns_completed = 0
         self.num_sides = 4
 
         # Track active behavior state
@@ -40,7 +40,7 @@ class DriveSquareNode(Node):
         was_active = self.is_active
         self.is_active = msg.data == "SQUARE_DRIVE"
 
-        # If we just switched into SQUARE_DRIVE, reset starting time
+        # only start if it is changed, do nothing when already in the process
         if self.is_active and not was_active:
             print("start SQUARE DRIVING")
             now = self.get_clock().now().nanoseconds / 1e9
@@ -49,11 +49,11 @@ class DriveSquareNode(Node):
     def reset(self, now):
         self.phase = "TURN"
         self.phase_start_time = now
-        self.sides_completed = 0
+        self.turns_completed = 0
 
+    # used to send completed signal back to FSM
+    # doing this via a new topic instead of adding an existing state in the enum, to keep the FSM the central processing node and only node writing to the state topic
     def finish_square(self):
-        """Called once the 4th side's turn is complete. Stops the behavior and
-        reports completion; the FSM controller decides what state comes next."""
         self.is_active = False
         print("SQUARE DRIVE COMPLETE")
         msg = String()
@@ -70,20 +70,20 @@ class DriveSquareNode(Node):
 
         if self.phase == "DRIVE":
             if elapsed > self.drive_duration:
-                self.phase = "TURN"
-                self.phase_start_time = now
+                self.turns_completed += 1
+                if self.turns_completed >= self.num_sides:
+                    self.finish_square()
+                    # cmd stays zero so we stop cleanly on the final side
+                else:
+                    self.phase = "TURN"
+                    self.phase_start_time = now
             else:
                 cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
         elif self.phase == "TURN":
             if elapsed > self.turn_duration:
-                self.sides_completed += 1
-                if self.sides_completed >= self.num_sides:
-                    self.finish_square()
-                    # cmd stays zero so we stop cleanly on the final side
-                else:
-                    self.phase = "DRIVE"
-                    self.phase_start_time = now
+                self.phase = "DRIVE"
+                self.phase_start_time = now
             else:
                 cmd.linear.x = 0.0
                 cmd.angular.z = self.turn_speed
