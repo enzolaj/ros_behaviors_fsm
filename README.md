@@ -24,46 +24,59 @@ and used in practice.
 
 ## 2. Individual Behaviors
 
-In this section you will provide the details of each individual behavior you
-created / is part of this repository. At a minimum, you should have an emergency
-stop, driving in a shape, and wall-following. Any additional behaviors you
-created as part of your finite-state-machine should also be described here.
+Here are the details of each individual behavior, discussing both the implementation programatically, theory behind the implementation, and how it fits into the broader architecture.
 
 ### <a name="driving-in-a-square" id="driving-in-a-square"></a>2.1 Driving in a Square
-
+ 
 #### 2.1.1 Description
-
+ 
 This behavior does exactly what the name suggests, which is having the Neato
 drive in a square. The Neato will complete the square exactly once and be back
 at the initial state with the roughly the same position and orientation.
+ 
+#### 2.1.2 Architecture
+ 
+*Table 1: Square-drive node topics; subscribers and publishers with their roles and when they're called.*
+ 
+| Topic                | Direction | Message type          | When                                          | Role                                                         |
+| -------------------- | --------- | --------------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| `/state`             | subscribe | `std_msgs/String`     | on controller broadcast                       | Sets `is_active` true only when the state is `SQUARE_DRIVE`  |
+| `/desired_cmd_vel`   | publish   | `geometry_msgs/Twist` | every timer tick (10 Hz)<br>-<br>while active | Drive or turn command sent to the safety node                |
+| `/drive_square_done` | publish   | `std_msgs/String`     | once<br>-<br>after the fourth side            | Moves the controller from `SQUARE_DRIVE` to `WALL_FOLLOWING` |
+ 
+*Table 2: Square-drive parameters.*
+ 
+| Parameter        | Value     | Role                                                  |
+| ---------------- | --------- | ----------------------------------------------------- |
+| `forward_speed`  | 0.3 m/s   | linear speed during `DRIVE`                           |
+| `turn_speed`     | 0.6 rad/s | angular speed during `TURN`                           |
+| `drive_duration` | 3 s       | length of each `DRIVE` phase; nominal side of 0.9 m   |
+| `turn_duration`  | 2.7 s     | length of each `TURN` phase; nominal turn of 1.62 rad |
+| `num_sides`      | 4         | `DRIVE` phases before the square is complete          |
+| timer period     | 0.1 s     | control loop rate (10 Hz)                             |
+| initial `phase`  | `TURN`    | first phase on entry                                  |
 
-#### 2.1.2 Design & Implementation
+#### 2.1.3 Design & Implementation
+ 
+The drive square behavior is implemented through a simple time-based approach. The node commands a fixed forward speed for a fixed duration to produce each side, then a fixed angular speed for a fixed duration to produce each corner. We chose this over an odometry-based controller because the square is only the first state of the FSM cycle, and its accuracy does not impact the wall-following or cookie-following behaviors. The time saved went toward those behaviors and our individual learning goals. 
+ 
+The node's only input is the `/state` topic. It publishes velocity commands on `/desired_cmd_vel` and, once the square is finished, a completion message on `/drive_square_done`. We used a separate completion topic rather than letting the node write to `/state` itself to keep the FSM controller as the only node that ever changes the state. The square node reports that it is done, and the controller decides what happens next.
 
-The implementation of this behavior is time-based, where the Neato would drive
-and turn at a pre-configured speed and duration in order to complete the square.
-This results in an essentially open-loop control, where the robot drifts
-overtime when it is completing the third to fourth side of the square, as shown
-in the image below. This can be fixed by adopting a closed-loop control
-technique by calculating odometry and using sensor information to correct the
-trajectories overtime. However, we decided to use a simpler time-based approach
-for this behavior for simplicity to have more time for other behaviors in this
-projects to meet our individual learning goals.
+In the `state_callback` function, we check if the value of `is_active` is equal to the previous one, which means that we only activate on a state change and not every state message. This architecture is used for the actuation on the other behaviors as well.
+ 
+The motion itself runs in `run_loop`, which uses a 10 Hz timer to send its messages. If the node is inactive, the callback returns immediately and publishes nothing. Otherwise, it calls `compute_command`, which checks how long the current phase has lasted. In a `TURN` phase the node commands `turn_speed` until `turn_duration` s have elapsed, then switches to `DRIVE`. In a `DRIVE` phase it commands `drive_speed` m/s until `drive_duration` s have elapsed, then increments `turns_completed` and switches back to `TURN`. Each switch records a new phase start time.
+ 
+The square begins with a turn rather than a drive. When the robot enters `SQUARE_DRIVE` right after eating a cookie, the cookie is still directly ahead, so driving first would run into it.
+ 
+After the fourth `DRIVE` phase, `finish_square()` clears `is_active` and publishes `DRIVE_SQUARE_DONE` on `/drive_square_done`. The command for that tick is left at zero, so the robot stops cleanly on the last side. The controller then moves to `WALL_FOLLOWING`.
+ 
+#### 2.1.4 Limitations
+Inherently, since we are not using a closed-loop approach via some odometry, we never actually have information regarding the state of the Neato or the square. Therefore, if something were to occur that modifies the Neato, it will not be able to realize and then react to still produce the square.
+Additionally, we tuned the duration by observation rather than deriving it. This was done since the theoretical optimal turn duration, which would've been derived via dividing our turn distance (of 90 degrees) by our angular speed, did not actually lead to a turn of 90 degrees. This was likely due to a simulator bug with the original Neato SDF file that impacted the wheel's grip on the surface; however, we did not deem it necessary to change afterwards as the square was "good enough". With this, we also assume that the Neato has instant acceleration, which is not true.
 
-There are no other topics subscribed to besides the `/state` topic for FSM
-control. However, upon finishing drawing a square, this node will publish the
-`/drive_square_completed` topic to indicate the completion of this behavior to
-the FSM controller. This is an intentional design decision where we avoided
-adding additional states to the `/state` topics for better organization. The FSM
-controller, which will be touched on in later section, is designed to be the
-only node that can write and publish to the `/state` topic to maintain clarity
-and state management. Therefore we use another separate topic to indicate the
-completion of this behavior and let the FSM controller perform the state
-transition.
+#### 2.1.5 Demonstration
 
-<p align="center">
-  <img src="docs/square_drive.gif" alt="Neato driving in a square">
-</p>
-<p align="center"><em>Figure 1: Neato driving in a square.</em></p>
+<p align="center"> <img src="docs/square_drive.gif" alt="Neato driving in a square"> </p> <p align="center"><em>Figure 1: Neato driving in a square.</em></p>
 
 ### <a name="wall-following" id="wall-following"></a>2.2 Wall Following
 
@@ -266,49 +279,73 @@ See the recorded bag at
 
 ## 3. Finite State Machine
 
-Our finite state machine for this project follows the background story as the
-following:
+The decision to transition between our states was arbitrary; hence, we decided to make a story that details why we have selected our chosen transition periods:
 
-Meet our lazy Neato: a devoted minimalist who treats doing the absolute bare
-minimum as a fine art and refuses to overexert himself under any circumstances.
-Employed to draw as many squares as possible, he clocks in just long enough to
-complete exactly one square trajectory before he gets too tired. The moment that
-he completes drawing of exactly one square, he immediately stops working and
-taking a walk along the wall. He usually walks forever just to avoid working,
-unless he is motivated by a sweet treat, like a cookie. Whenever he sees a
-cookie while he is wandering, he will immediately turn his full attention to the
-treat and run towards it until the cookie is within reach to eat. Once he eats
-the cookie, he will happily go back to work to draw another square, which will
-get him tired again immediately afterwards and repeat the cycle.
+Our Neato recognizes the absurd life it lives. Students use it over and over with minimal reward. Now, our Neato has evolved into a true minimalist! The Neato works at the square-driving factory and is required to repeatedly drive in a square over and over; however, this minimalist mindset makes the Neato quite lazy, and, after only a single square drawn, our Neato gets tired and wants to go home. To go home, the Neato finds the closest wall and follows it - that's what its mother told it to do when lost... Yet, all that hard work has made our Neato hungry. Therefore, as soon as it sees a cookie while walking home, it immediately stops thinking about home and instead about the cookie, rotating and driving towards that cookie. When it gets close enough to the cookie, it will eat it, and, in a beautiful turn of events, find the motivation to draw yet another square. But, of course, our Neato is still that same, lazy, minimalist Neato, and after just one square drawn, the cycle continues.
+
 
 ### 3.1 Overall Design
+The Neato experiencing the state machine architrecure continuously loops through the cycle of behaviors. On startup, it will wait, then drive a single square and report that it finished. Once that is completed, it switches to following the wall on its right and will do so indefinitely. However, if a cookie is found via the cookie-following node, the Neato will leave this state, and will turn to the cookie and attempt to eat it by driving very close to it. Once it is within eating distance, it will go back to the square driving, which starts with a turn to avoid running into the cookie it just "ate", and the cycle begins again. This occurs all while someone in the background can manually switch the states via keyboard inpuit. This was very closely mimicked in the story... :)
+ 
+The system is made of five nodes:
+ 
+- `finite_state_controller`: owns the current state, publishes it on `/state`, and performs every transition.
+- `drive_square`: drives one open-loop square and reports completion 
+- `wall_following`: follows the wall on the robot's right 
+- `cookie_following`: detects cookies in every state and drives to one when active
+- `safety_node`: the only node that publishes to `/cmd_vel`, acts as a safety filter for robot commands
+- 
+The controller node does not command the behaviors directly. It publishes a single state string, and each behavior node compares that string to its own state name and turns itself on or off. The behaviors report events back to the controller on their own topics, and the controller decides whether each event causes a transition. 
 
-In this section, you will have:
 
-- At least one paragraph describing the intended performance of a Neato
-  executing your finite state machine.
-- Some explanation of your finite-state machine that includes:
-  - A list of nodes with brief descriptions.
-  - A list of transition criteria with brief descriptions.
-  - This explanation can be in words or in a well-annotated diagram (or both)
-
-### 3.2 Implementation Details
-
-In this section, you will describe how you implemented your finite state
-machine, with pointers to relevant code in the repository.
-
-### 3.3 Demonstration
-
-In this section, you can provide some remarks about the current performance of
-your finite state machine, and can include figures, gifs, or embedded videos
-that demonstrate the performance. You can also link to relevant `rosbag` files
-in the repository.
+*Table 8: State transitions.*
+ 
+| From             | To               | Trigger              | Sent by                     | Condition at sender                          |
+| ---------------- | ---------------- | -------------------- | --------------------------- | -------------------------------------------- |
+| (startup)        | `SQUARE_DRIVE`   | one-shot 1 s timer   | `finite_state_controller`   | startup delay elapsed                        |
+| `SQUARE_DRIVE`   | `WALL_FOLLOWING` | `/drive_square_done` | `drive_square`              | fourth side complete                         |
+| `WALL_FOLLOWING` | `COOKIE_FOLLOW`  | `/cookies_found`     | `cookie_following`          | first detection of a new cookie              |
+| `COOKIE_FOLLOW`  | `SQUARE_DRIVE`   | `/cookies_eaten`     | `cookie_following`          | active and within 0.65 m of the cookie center |
+| any              | any              | keyboard `0`–`3`     | controller input thread     | operator input                               |
+ 
+### 3.2 Architecture
+ 
+*Table 9: Finite-state controller topics; subscribers and publishers with their roles and when they're called.*
+ 
+| Topic                | Direction | Message type      | When                                                                  | Role                                                             |
+| -------------------- | --------- | ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `/state`             | publish   | `std_msgs/String` | 1 s after startup<br>-<br>on every transition<br>-<br>on keyboard input | Broadcasts the current state to every behavior and the safety node |
+| `/drive_square_done` | subscribe | `std_msgs/String` | once per square                                                       | `SQUARE_DRIVE` to `WALL_FOLLOWING`                               |
+| `/cookies_found`     | subscribe | `std_msgs/Int32`  | first detection of a new cookie                                       | `WALL_FOLLOWING` to `COOKIE_FOLLOW`            |
+| `/cookies_eaten`     | subscribe | `std_msgs/Int32`  | once per cookie, on arrival                                           | `COOKIE_FOLLOW` to `DRIVE_SQUARE`             |
+ 
+*Table 10: Finite-state controller parameters.*
+ 
+| Parameter          | Value                                                    | Role                                         |
+| ------------------ | -------------------------------------------------------- | -------------------------------------------- |
+| initial state      | `SQUARE_DRIVE`                                           | state published at startup                   |
+| startup timer      | 1.0 s                                                    | delay before the first `/state` publish so subscribers can connect |
+| keyboard mapping   | `1` `SQUARE_DRIVE`, `2` `WALL_FOLLOWING`, `3` `COOKIE_FOLLOW`, `0` `STOP` | manual override from any state |
+ 
+### 3.3 Implementation Details
+ 
+The controller is implemented in `finite_state_controller.py` as the `FiniteStateController` node. It stores the current state as a string in `current_state`, and every change goes through a single method, `set_state()`, which updates `current_state`, publishes the new value on `/state`, and prints it to the terminal. Because nothing else publishes on `/state`, the terminal output is a complete log of every transition the robot made.
+ 
+ 
+The keyboard menu runs in a separate thread started in the arbiter. `terminal_input_loop` prints the menu, blocks on `input()`, maps `1`, `2`, `3`, and `0` to `SQUARE_DRIVE`, `WALL_FOLLOWING`, `COOKIE_FOLLOW`, and `STOP`, respectively, and calls `set_state()` directly. Running it in its own thread lets the menu wait for input while `rclpy.spin()` keeps servicing the event callbacks on the main thread. Marking it as a daemon lets the program exit without waiting for the blocked `input()` call to return. Invalid input prints an error and redisplays the menu without changing the state.
+ 
+ 
+### 3.4 Limitations
+ 
+As mentioned in the previous behavior files, there are many limitations, or edge cases, with our state machine. The controller has no way out of `COOKIE_FOLLOW` except eating a cookie. If the cookie is lost, the cookie-following node stops publishing velocity and the robot sits still until a cookie reappears or an operator changes the state from the keyboard. Because the found event only fires at the start of a new track, a cookie that is first seen while the robot is still drawing its square is ignored by the controller and never triggers a transition later, even if it stays in view during wall following.
+ 
+Additionally, the 1 s startup delay for the square node is a guess and not verified. If it were not be delayed more, then the state machine would never cycle and remain inactive.
 
 ## 4. Learning Objectives and Final Takeaways
 
-In this section, please report on each individual's learning objectives with
-this project and key takeaways. If there are any collective takeaways to report
-(such as possible future work), you may also report these here.
+Enzo - 
+Irene - 
+Jack - 
 
 ## 5. How To Run
 
