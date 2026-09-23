@@ -1,7 +1,7 @@
 import threading
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32
 
 class FiniteStateController(Node):
     def __init__(self):
@@ -10,16 +10,21 @@ class FiniteStateController(Node):
         self.drive_square_done_sub = self.create_subscription(
             String, "drive_square_done", self.drive_square_done_callback, 10
         )
+        self.cookies_found_sub = self.create_subscription(
+            Int32, "cookies_found", self.cookies_found_callback, 10
+        )
+        self.cookies_eaten_sub = self.create_subscription(
+            Int32, "cookies_eaten", self.cookies_eaten_callback, 10
+        )
 
         # by default starts in SQUARE_DRIVE
         self.current_state = "SQUARE_DRIVE"
 
-        # Separate thread so input() doesn't block rclpy.spin()
+        # start a separate thread for listening to the keyboard input
         self.input_thread = threading.Thread(target=self.terminal_input_loop, daemon=True)
         self.input_thread.start()
 
-        # Give other nodes' subscriptions a moment to come up via discovery before
-        # publishing the default starting state, so it isn't published into the void.
+        # need to wait for other nodes to be up first to subscribe first before making the first publish
         def publish_initial_state():
             startup_timer.cancel()
             self.set_state(self.current_state)
@@ -35,9 +40,18 @@ class FiniteStateController(Node):
         print(f">> Published State: {self.current_state}\n")
 
     def drive_square_done_callback(self, msg):
-        # Guard against duplicate/late messages: only act on this while we're
-        # actually still in SQUARE_DRIVE, so it can only trigger the switch once.
-        if msg.data == "DRIVE_SQUARE_DONE" and self.current_state == "SQUARE_DRIVE":
+        # only trigger when switching from SQUARE_DRIVE to WALL_FOLLOWING
+        if self.current_state == "SQUARE_DRIVE":
+            self.set_state("WALL_FOLLOWING")
+
+    def cookies_found_callback(self, msg):
+        # the call back does not need to use the data, but just to keep the number for future reference
+        if self.current_state == "WALL_FOLLOWING":
+            self.set_state("COOKIE_FOLLOW")
+
+    def cookies_eaten_callback(self, msg):
+        # the call back does not need to use the data, but just to keep the number for future reference
+        if self.current_state == "COOKIE_FOLLOW":
             self.set_state("WALL_FOLLOWING")
 
     def print_menu(self):
