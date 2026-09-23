@@ -88,7 +88,7 @@ Basic wall following was implemented under the assumption that the walls were re
 
 The wall-following module uses incoming `LaserScan` messages from the `/scan` topic to determine whether the Neato should continue following the wall or turn at an upcoming corner. Both parallel drive and corner handling determine angular velocity, while linear velocity is constant at $0.2\,\mathrm{m/s}$.
 
-### 2.2.1 Second-Order System Approximation
+#### 2.2.1 Second-Order System Approximation
 
 We model the parallel wall-following behavior as an approximate second-order system. The two quantities describing the robot relative to the wall are defined as
 
@@ -174,7 +174,7 @@ $$
 
 As a result, the Neato is designed to converge toward the target wall distance as quickly as possible without oscillating in our idealized model.
 
-### 2.2.2 Proportional Control
+#### 2.2.2 Proportional Control
 
 The distance error, `dist_error`, is calculated as
 
@@ -214,7 +214,7 @@ to ensure a safe, stable, and feasible turn.
 
 Conceptually, the two feedback terms serve different purposes. The distance-error term $K_e e$ corrects the Neato's lateral position, while the heading-error term $K_\alpha\alpha$ adjusts its orientation.
 
-### 2.2.3 Corner Handling
+#### 2.2.3 Corner Handling
 
 Corner handling bypasses the proportional controller used during parallel wall following. A single LiDAR measurement, `msg.ranges[0]`, measures the distance directly in front of the Neato.
 
