@@ -6,19 +6,21 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker
-from std_msgs.msg import String
+from std_msgs.msg import String, Int32
 from rclpy.qos import qos_profile_sensor_data
+# For this file, I had some AI assistance regarding implementing the visualization and making the cookie states work 
  
  
 class CookieFollowNode(Node):
-    """This node uses the RANSAC algorithm to fit a circle of known radius (a cookie) """
+    """This node uses the RANSAC algorithm to fit a circle of known radius (a cookie).
+    Finding always runs and counts cookies found; moving and counting cookies eaten only happen when active."""
  
     def __init__(self):
-        """Initializes the node, sets RANSAC parameters, and creates the publisher and subscribers"""
+        """Initializes the node, sets RANSAC parameters, and creates the publishers and subscribers"""
         super().__init__("cookie_following")
  
         # radius of the cookie, radius filter value
-        self.target_radius = 0.24
+        self.target_radius = 0.25
         self.radius_tol = 0.03
  
         # inlier tolerance, lower = more restrictive but miss circle, higher = wall can be circle
@@ -46,15 +48,33 @@ class CookieFollowNode(Node):
  
         # Track active behavior state
         self.is_active = False
-
+ 
         # lidar mounting on the neato (from tf2_echo base_link base_laser_link)
         # rotated 180 deg about z and 0.084 m behind the center of base_link
         self.lidar_offset_x = -0.084
  
+        # running totals, these just count up forever and get published on every new one
+        self.found_count = 0
+        self.eaten_count = 0
+ 
+        # tracking = locked onto a cookie rn, eaten = this cookie already got counted 
+        self.tracking = False
+        self.eaten = False
+ 
+        # ransac flickers sometimes, so only call the cookie lost after a few empty scans in a row
+        # 5 Hz scan rate = 5 misses is about 1 s
+        self.miss_count = 0
+        self.max_misses = 5
+
+        # publishers for control
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
+        self.found_pub = self.create_publisher(Int32, "cookies_found", 10)
+        self.eaten_pub = self.create_publisher(Int32, "cookies_eaten", 10)
+        self.marker_pub = self.create_publisher(Marker, "cookie_show", 10)
+
+        # subscribers / inputs
         self.state_sub = self.create_subscription(String, "state", self.state_callback, 10)
         self.scan_sub = self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
-        self.marker_pub = self.create_publisher(Marker, "cookie_debug", 10)
  
     def state_callback(self, msg):
         """
@@ -72,16 +92,13 @@ class CookieFollowNode(Node):
  
     def scan_callback(self, msg):
         """
-        Processes incoming laser scan messages to find the cookie and commands (published vel) the neato to follow it.
+        Processes incoming laser scan messages to find the cookie, counts cookies found and eaten,
+        and commands (desired vel) the neato to follow it when active.
         args:
             msg (LaserScan): The incoming laser scan message containing range data.
         returns: None
         """
-        # same state architecture from other nodes
-        # Do not run or publish commands if we are not the active state
-        if not self.is_active:
-            return
- 
+        # on scan, we do the find and only if active, do we drive after finding
         # iterate through all points from lidar scan and convert to cartesian
         points = []
         for i, r in enumerate(msg.ranges):
@@ -112,20 +129,20 @@ class CookieFollowNode(Node):
             p2, p3 = random.sample(neighbors, 2)
  
             cx, cy, r = self.get_circle_from_3_points(p1, p2, p3)
-
+ 
             # the next lines are filters that reject the proposes circle
             # if circle isn't found, try again (cx is none = no circle)
             if cx is None:
                 continue
-
+ 
             # if the radius is too diff, try again
             if abs(r - self.target_radius) > self.radius_tol:
                 continue
  
-            # if center isn't further from robot than points, try again 
+            # if center isn't further from robot than points, try again
             if math.hypot(cx, cy) <= math.hypot(p1[0], p1[1]):
                 continue
-
+ 
             # RANSAC logic
             inliers = 0
             for px, py in points:
@@ -139,6 +156,15 @@ class CookieFollowNode(Node):
         cmd = Twist()
         if best_center is not None:
             cx, cy = best_center
+ 
+            # saw it this scan so reset the lost counter
+            self.miss_count = 0
+ 
+            # only count it as found the first time we lock on, not every scan
+            if not self.tracking:
+                self.tracking = True
+                self.found_count += 1
+                self.found_pub.publish(Int32(data=self.found_count))
  
             # debug visualization using a flat cylinder to show both center and boundary
             # this was ai-assisted and human reviewed :D
@@ -159,25 +185,42 @@ class CookieFollowNode(Node):
             # now in robot frame, atan2 works fine (positive = left)
             distance = math.hypot(bx, by)
             angle = math.atan2(by, bx)
- 
+
+            # driving logic!!
             if distance > self.stop_distance:
                 #compute forward and angular vel and clamp to max speed
                 cmd.linear.x = min(self.max_linear, self.kp_linear * distance)
+                #min,max bc it should clamp in abs value
                 cmd.angular.z = max(-self.max_angular, min(self.max_angular, self.kp_angular * angle))
             else:
                 cmd.linear.x = 0.0
                 cmd.angular.z = 0.0
+ 
+                # made it to the cookie, but it should only count as eaten if we drove here (active)
+                # once per cookie, eaten flag only resets when the cookie is lost
+                if self.is_active and not self.eaten:
+                    self.eaten = True
+                    self.eaten_count += 1
+                    self.eaten_pub.publish(Int32(data=self.eaten_count)) 
         else:
             # no reliable detection, so give up because we are sad and lazy
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
+ 
+            # one scan isnt enough to forget the cookie, wait for a few in a row
+            self.miss_count += 1
+            if self.miss_count >= self.max_misses:
+                self.tracking = self.eaten = False
  
             # hide marker when cookie is lost
             m = Marker(action=Marker.DELETE)
             m.header = msg.header
             self.marker_pub.publish(m)
  
-        self.cmd_vel_pub.publish(cmd)
+        # same state architecture from other nodes
+        # finding always runs but only drive if we are the active state
+        if self.is_active:
+            self.cmd_vel_pub.publish(cmd)
  
     def get_circle_from_3_points(self, p1, p2, p3):
         """Calculates the circumcircle of three 2D points.
