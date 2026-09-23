@@ -27,7 +27,7 @@ class DriveSquareNode(Node):
         self.is_active = False
 
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
-        self.state_pub = self.create_publisher(String, "state", 10)
+        self.done_pub = self.create_publisher(String, "drive_square_done", 10)
         self.state_sub = self.create_subscription(
             String, "state", self.state_callback, 10
         )
@@ -52,12 +52,12 @@ class DriveSquareNode(Node):
 
     def finish_square(self):
         """Called once the 4th side's turn is complete. Stops the behavior and
-        hands off directly to wall following."""
+        reports completion; the FSM controller decides what state comes next."""
         self.is_active = False
-        print("SQUARE DRIVE COMPLETE -> switching to WALL_FOLLOWING")
+        print("SQUARE DRIVE COMPLETE")
         msg = String()
-        msg.data = "WALL_FOLLOWING"
-        self.state_pub.publish(msg)
+        msg.data = "DRIVE_SQUARE_DONE"
+        self.done_pub.publish(msg)
 
     def compute_command(self, now):
         cmd = Twist()
