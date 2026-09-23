@@ -53,6 +53,12 @@ class SafetyNode(Node):
     def state_callback(self, msg):
         if msg.data == "STOP":
             self.stop()
+        else:
+            # Picking a new behavior state is treated as a manual override/reset:
+            # otherwise a stuck hit_bump latch (e.g. if the bump sensor never
+            # sends a "cleared" message once contact ends) would block motion
+            # forever with no way to recover.
+            self.hit_bump = False
 
             
 

@@ -8,7 +8,7 @@ from rclpy.qos import qos_profile_sensor_data
 
 from geometry_msgs.msg import Twist, Point, PointStamped
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import ColorRGBA, Float32MultiArray, String
+from std_msgs.msg import ColorRGBA, Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener, TransformException
 from tf2_geometry_msgs import do_transform_point
@@ -34,7 +34,7 @@ class WallFollowerNode(Node):
             f"p_dist={self.p_dist:.2f}, p_angle={self.p_angle:.2f} "
             f"(zeta={self.damping_ratio})")
 
-        self.fixed_frame = "odom" # frame where hit point trail is stored
+        self.fixed_frame = "base_link" # frame where hit point trail is stored
         self.hit_history = deque(maxlen=200)  # oldest points drop off automatically
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -43,22 +43,10 @@ class WallFollowerNode(Node):
         # [dist_error, alpha, steer_before_clamp] for plotting from a bag
         self.debug_pub = self.create_publisher(Float32MultiArray, "wall_debug", 10)
 
-        self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
 
         self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
-        self.state_sub = self.create_subscription(
-            String, "state", self.state_callback, 10
-        )
 
-        # Track active behavior state
-        self.is_active = False
-
-    def state_callback(self, msg):
-        was_active = self.is_active
-        self.is_active = msg.data == "WALL_FOLLOWING"
-
-        if self.is_active and not was_active:
-            print("start WALL_FOLLOWING")
 
     @staticmethod
     def valid_point(range_index, msg):
@@ -67,17 +55,13 @@ class WallFollowerNode(Node):
 
     def wall_ahead(self, msg):
         x = msg.ranges[0]
-        if x > self.target_distance:
+        if x > 3 * self.target_distance:
             pass
         else:
             return True
 
         
-    def scan_callback(self, msg):
-            # Do not run or publish commands if we are not the active state
-            if not self.is_active:
-                return
-
+    def scan_callback(self, msg):            
             cmd = Twist()
             cmd.linear.x = self.forward_speed
 
@@ -107,9 +91,9 @@ class WallFollowerNode(Node):
             # -1 multiplier because the wall is on the right, make not hardcoded later
             steer = -1.0 * (self.p_dist * capped_error + self.p_angle * alpha)
 
-            # turn if wall ahead (assuming we're following on the right)
+            # turn if wall ahead 
             if self.wall_ahead(msg):
-                cmd.angular.z = 1.0
+                cmd.angular.z = -1.0 * self.side
             # else, clamp the turn speed
             else:
                 cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
