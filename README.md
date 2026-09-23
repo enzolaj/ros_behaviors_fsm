@@ -80,21 +80,141 @@ Additionally, we tuned the durations by observation rather than deriving them. T
 
 ### <a name="wall-following" id="wall-following"></a>2.2 Wall Following
 
-#### 2.2.1 Description & Intent
+Basic wall following was implemented under the assumption that the walls were relatively connected, with easily identifiable corners, and did not contain small corridors. For ease of transition from the `drive_square` behavior to `wall_following`, the Neato drives parallel to the left side of the wall. However, the side of the wall is not hardcoded in the wall-following controller. The variable `self.side` determines which side is followed, allowing the Neato to trace either side of the wall if desired.
 
-[High-level description of the wall-following
-behavior and what it intends to accomplish.]
+The wall-following module uses incoming `LaserScan` messages from the `/scan` topic to determine whether the Neato should continue following the wall or turn at an upcoming corner. Both parallel drive and corner handling determine angular velocity, while linear velocity is constant at $0.2\,\mathrm{m/s}$.
 
-#### 2.2.2 Implementation Details
+### Second-Order System Approximation
 
-[Laser scan subscribers, line fitting/RANSAC
-techniques, proportional control (P/PID) loops, velocity publishing, and
-debugging markers/visualizations.]
+We model the parallel wall-following behavior as an approximate second-order system. The two quantities describing the robot relative to the wall are defined as
 
-#### 2.2.3 Key Design Decisions
+$$
+e(t) = d(t) - d_{\mathrm{target}},
+$$
 
-[Target distance from the wall, orientation
-alignment strategies, corner handling, and technical justifications.]
+$$
+\alpha(t) = \text{heading error relative to the wall},
+$$
+
+where $e(t)$ is the lateral distance error and $\alpha(t)$ is the orientation error.
+
+During parallel drive, the Neato subscribes to the `/scan` topic and uses two LiDAR points to triangulate its position and heading relative to the wall. For right-wall following, these points are `msg.ranges[270]` and `msg.ranges[290]`, while for left-wall following they are `msg.ranges[90]` and `msg.ranges[70]`. This triangulation is used to estimate the Neato's distance and heading relative to the wall, represented by $e$ and $\alpha$.
+
+The computation for $\alpha$ is as follows:
+
+$$
+\alpha = \tan^{-1}\left(\frac{a\cos(\theta)-b}{a\sin(\theta)}\right)
+$$
+
+<p align="center">
+  <img src="docs/alpha.png">
+</p>
+
+The first state equation describes how the lateral distance error changes as the Neato moves forward.
+
+$$
+\dot{e} = v\sin(\alpha)
+$$
+
+If the Neato is perfectly parallel to the wall, then $\alpha=0$ and therefore $\dot{e} = v\sin(0) = 0$. Thus, there is no change in the lateral distance from the wall.
+
+When $\alpha \neq 0$, a component of the Neato's forward velocity points toward or away from the wall, causing the distance error to change. Therefore, for small heading errors, the small-angle approximation $\sin(\alpha) \approx \alpha$ gives $\dot{e} \approx v\alpha$.
+
+Our second state equation describes how the heading error changes with the commanded angular velocity $\omega$.
+
+$$
+\dot{\alpha} = \omega
+$$
+
+The proportional controller generates the angular velocity according to
+
+$$
+\omega = -K_e e - K_\alpha \alpha,
+$$
+
+where $K_e$ is the distance-error gain and $K_\alpha$ is the heading-error gain. Therefore,
+
+$$
+\dot{\alpha} = -K_e e - K_\alpha\alpha.
+$$
+
+Differentiating the first equation and substituting the second gives
+
+$$
+\ddot{e} = v\dot{\alpha} = -vK_e e - vK_\alpha\alpha.
+$$
+
+Since
+
+$$
+\alpha \approx \frac{\dot{e}}{v},
+$$
+
+the system can be written as
+
+$$
+\begin{aligned}
+\ddot{e} + K_\alpha\dot{e} + vK_e e &= 0, \\
+\omega_n &= \sqrt{vK_e}, \\
+\zeta &= \frac{K_\alpha}{2\sqrt{vK_e}}.
+\end{aligned}
+$$
+
+In our implementation, the distance-error gain and heading-error gain correspond to $K_e = $ `p_dist` and $K_\alpha = $ `p_angle`.
+
+The heading-error gain was selected for critical damping, $\zeta=1$:
+
+$$
+K_\alpha = 2\zeta\sqrt{vK_e}
+$$
+
+As a result, the Neato is designed to converge toward the target wall distance as quickly as possible without oscillating in our idealized model.
+
+### Proportional Control
+
+The distance error, `dist_error`, is calculated as
+
+$$
+e = d - d_{\mathrm{target}},
+$$
+
+where $d$ is the estimated perpendicular distance from the wall and $d_{\mathrm{target}}=0.3\,\mathrm{m}$.
+
+The distance error is capped before being passed to the controller
+
+$$
+e_{\mathrm{capped}} = \max\left(-e_{\max},\ \min(e_{\max},\ e)\right),
+$$
+
+keeping its response bounded. Therefore, if the two walls are not completely adjacent at a corner, the estimated distance won't suddenly change, causing the Neato to swerve in response.
+
+The controller output is
+
+$$
+\omega = K_e e_{\mathrm{capped}} + K_\alpha\alpha,
+$$
+
+with the sign adjusted according to the selected wall-following side. The resulting angular velocity, `steer`, is also clamped:
+
+$$
+\omega_{\mathrm{cmd}} = \max\left(-\omega_{\max},\ \min(\omega_{\max},\ \omega)\right),
+$$
+
+where
+
+$$
+\omega_{\max} = \pm 1\,\mathrm{rad/s}
+$$
+
+to ensure a safe, stable, and feasible turn.
+
+Conceptually, the two feedback terms serve different purposes. The distance-error term $K_e e$ corrects the Neato's lateral position, while the heading-error term $K_\alpha\alpha$ adjusts its orientation.
+
+### Corner Handling
+
+Corner handling bypasses the proportional controller used during parallel wall following. A single LiDAR measurement, `msg.ranges[0]`, measures the distance directly in front of the Neato.
+
+A binary trigger was used to determine if the distance from the wall was under a certain threshold, $0.3\,\mathrm{m}$. However, since we did not design our Neato to turn in place, this threshold was too low for it to complete a turn before crashing into the wall. Therefore, after trial and error in simulation, a factor of 4 was chosen to amplify this threshold. If a wall was detected, we published our `/desired_cmd_vel` to turn the opposite way of `self.side`.
 
 #### 2.2.4 Visuals & Demonstration
 
