@@ -349,17 +349,59 @@ Irene -
 Jack - 
 
 ## 5. How To Run
-
-This section should provide instructions for downloading, building, and
-running your code and any associated bag files.
-
+ 
+### 5.1 Prerequisites
+ 
+The package runs on ROS 2 with the CompRobo Neato packages installed in the same workspace. These provide the simulator worlds (`neato2_gazebo`), the physical-robot driver (`neato_node2`), and the bump message type used by the safety node (`neato2_interfaces`). The tutorial for installing these can be found on the CompRobo website at: https://comprobo26.github.io/How%20to/setup_your_environment
+ 
+We tested all of our code with the standard ROS2 Jazzy distribution.
+ 
+### 5.2 Download and Build
+ 
+Clone the repository into the `src` folder of your ROS 2 workspace, then build the package and source the workspace from the workspace root:
+ 
 ```bash
-ros2 launch neato2_gazebo neato_gauntlet_world.py
-ros2 launch neato2_gazebo empty_world.py
+cd ~/ros2_ws/src
+git clone https://github.com/enzolaj/ros_behaviors_fsm
+cd ~/ros2_ws
 colcon build --packages-select ros_behaviors_fsm
 source install/setup.bash
+```
+ 
+### 5.3 Running in Simulation
+ 
+Start a simulated world in one terminal. 
+ 
+```bash
+ros2 launch neato2_gazebo neato_gauntlet_world.py
+# or
+ros2 launch neato2_gazebo empty_world.py
+```
+ 
+If you want to test cookie following, add a cylinder of radius 0.25 m to the world from Gazebo's insert menu. The default Gazebo cylinder has this radius. This is also naturally in the gauntlet world, but many other objects are there as well.
+ 
+In a second terminal, start all of the behavior nodes:
+ 
+```bash
 ros2 launch ros_behaviors_fsm all_nodes_launch.py
 ```
+
+These are all of the behavior nodes. To then see the cycle begin, we launch the FSM node:
+```bash
+ros2 run ros_behaviors_fsm finite_state_controller
+```
+In this state, you will see potential user input printed to the terminal it was run in. This allows you to manually override any state commands as you see fit.
+
+### 5.4 Visualization
+You can visualize the topics in Rviz2. To do this, run:
+```bash
+rviz2
+```
+This will open RViz, which you can then add the special visualization topics:
+
+- `LaserScan` on `/scan`, to see the raw lidar points.
+- `Marker` on `/cookie_show`, to see the fitted cookie cylinder.
+- `MarkerArray` on `/wall_markers`, to see what the Neato thinks is the wall its following.
 
 ## 6. Tool Usage
 Throughout the development of this project, we did use AI tools, such as LLMs, to assist with certain programming. We were conscious of the effect this had on our project and mainly used it to assist with the visualization aspects within our files. For example, I (Enzo) used Claude to help me understand what was the problem with my marker visualization in the cookie_follow.py file. This then helped me realize what was occurring between the frames and that is independent thought. 
