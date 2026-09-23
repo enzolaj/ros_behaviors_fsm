@@ -15,8 +15,15 @@ from tf2_geometry_msgs import do_transform_point
 from collections import deque
 
 class WallFollowerNode(Node):
+    """This node uses triangulation with two lidar points (one perpendicular to the Neato and 
+    another 20 degrees above) to follow the wall on its right or left side (depending on the 
+    state specified. A single lidar point that is straight ahead determines when to turn for 
+    corners."""
 
     def __init__(self):
+        """Initializes node; sets subscribers and publishers; and triangulation and collision 
+        avoidance parameters."""
+
         super().__init__("wall_following")
         self.forward_speed = 0.2 # m/s
         self.target_distance = 0.3 # meters to stay away from the wall
@@ -54,6 +61,16 @@ class WallFollowerNode(Node):
         self.is_active = False
 
     def state_callback(self, msg):
+        """Determines if point within sensor's range. False for 0, inf, and NaN.
+        
+        Args: 
+            range_index (float): Index of lidar scan
+            msg (string): Incoming state message
+
+        Return:
+            Boolean: Whether or not the lidar scan straight ahead shows that a 
+            wall is ahead (distance is below target_distance threshold).
+        """
         was_active = self.is_active
         self.is_active = msg.data == "WALL_FOLLOWING"
 
@@ -62,10 +79,28 @@ class WallFollowerNode(Node):
 
     @staticmethod
     def valid_point(range_index, msg):
-        """Determines if point within sensor's range. False for 0, inf, and NaN."""
+        """Determines if point within sensor's range. False for 0, inf, and NaN.
+        
+        Args: 
+            range_index (float): Index of lidar scan
+            msg (string): Incoming state message
+
+        Return:
+            Boolean: Whether or not the lidar scan straight ahead shows that a 
+            wall is ahead (distance is below target_distance threshold).
+        """
         return msg.range_min < range_index < msg.range_max
 
     def wall_ahead(self, msg):
+        """
+        Determines if lidar data traight ahead of Neato is under certain threshold.
+        If so, there is a wall ahead.
+
+        Args: 
+            msg (string): Incoming state message
+        Return:
+            Boolean
+        """
         x = msg.ranges[0]
         if x > 4 * self.target_distance:
             pass
@@ -74,62 +109,78 @@ class WallFollowerNode(Node):
 
         
     def scan_callback(self, msg):
-            # Do not run or publish commands if we are not the active state
-            if not self.is_active:
-                return
-
-            cmd = Twist()
-            cmd.linear.x = self.forward_speed
-
-            # 270 = right. 290 = 20deg above right
-            b = msg.ranges[270]  
-            a = msg.ranges[290]  
+        """Updates command velocity.
+        
+        Args: 
+            msg (string): Incoming state messages.
             
-            # just drive straight if there is no valid point
-            if not (self.valid_point(a, msg) and self.valid_point(b, msg)):
-                cmd.angular.z = 0.0
-                self.cmd_vel_pub.publish(cmd)
-                return cmd
+        Return: 
+            None
+        """    
+        # Do not run or publish commands if we are not the active state
+        if not self.is_active:
+            return
 
-            theta = math.radians(20) # hardcoded based on a,b
-            
-            # angle of the wall relative to the robot (alpha)
-            numerator = a * math.cos(theta) - b
-            denominator = a * math.sin(theta)
-            alpha = math.atan2(numerator, denominator)
-            
-            # perpendicular distance to the wall
-            current_distance = b * math.cos(alpha)
-            
-            # find how much we're off from target distance
-            dist_error = current_distance - self.target_distance
-            capped_error = max(-self.max_dist_error, min(self.max_dist_error, dist_error))
-            # -1 multiplier because the wall is on the right, make not hardcoded later
-            steer = -1.0 * (self.p_dist * capped_error + self.p_angle * alpha)
+        cmd = Twist()
+        cmd.linear.x = self.forward_speed
 
-            # turn if wall ahead 
-            if self.wall_ahead(msg):
-                cmd.angular.z = -1.0 * self.side
-            # else, clamp the turn speed
-            else:
-                cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
-
-
+        # 270 = right. 290 = 20deg above right
+        b = msg.ranges[270]  
+        a = msg.ranges[290]  
+        
+        # just drive straight if there is no valid point
+        if not (self.valid_point(a, msg) and self.valid_point(b, msg)):
+            cmd.angular.z = 0.0
             self.cmd_vel_pub.publish(cmd)
+            return cmd
 
-            self.debug_pub.publish(
-                Float32MultiArray(data=[dist_error, alpha, steer]))
-            self.publish_markers(msg.header.frame_id,
-                                self.polar_to_point(b, 270),
-                                self.polar_to_point(a, 290))
+        theta = math.radians(20) # hardcoded based on a,b
+        
+        # angle of the wall relative to the robot (alpha)
+        numerator = a * math.cos(theta) - b
+        denominator = a * math.sin(theta)
+        alpha = math.atan2(numerator, denominator)
+        
+        # perpendicular distance to the wall
+        current_distance = b * math.cos(alpha)
+        
+        # find how much we're off from target distance
+        dist_error = current_distance - self.target_distance
+        capped_error = max(-self.max_dist_error, min(self.max_dist_error, dist_error))
+        # -1 multiplier because the wall is on the right, make not hardcoded later
+        steer = -1.0 * (self.p_dist * capped_error + self.p_angle * alpha)
+
+        # turn if wall ahead 
+        if self.wall_ahead(msg):
+            cmd.angular.z = -1.0 * self.side
+        # else, clamp the turn speed
+        else:
+            cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
+
+
+        self.cmd_vel_pub.publish(cmd)
+
+        self.debug_pub.publish(
+            Float32MultiArray(data=[dist_error, alpha, steer]))
+        self.publish_markers(msg.header.frame_id,
+                            self.polar_to_point(b, 270),
+                            self.polar_to_point(a, 290))
 
 
     @staticmethod
     def polar_to_point(range_index, angle): 
+        """Transform points from polar to cartesian.
+        
+        Args:
+            range_index (float): Index of lidar scan
+            angle (int): Angle of lidar scan in degrees
+        """ 
         return Point(x = range_index * math.cos(math.radians(angle)),
                      y = range_index * math.sin(math.radians(angle)),
                      z = 0.0)
 
+
+# LLMs were used to write the framework for these visualization functions. Debugging and revisions were done on our own. 
     @staticmethod
     def marker(frame, marker_id, marker_type):
         """Making marker with necessary fields, rest is filled in with caller."""
@@ -154,6 +205,7 @@ class WallFollowerNode(Node):
 
 
     def publish_markers(self, frame, point_b, point_a):
+        """Publish markers showing current lidar points and last 200 scans."""
         origin = Point(x = 0.0, y = 0.0, z = 0.0)
 
         # lines from laser to hit points and wall between (triangle)
