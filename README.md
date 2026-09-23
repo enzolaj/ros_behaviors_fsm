@@ -4,6 +4,8 @@ Author Names: Jack W., Enzo S., Irene H.
 
 For Olin ENGR3590 Computational Introduction to Robotics
 
+This README is a comprehensive report that contains both conceptual and programmatic  information regarding implementation details of our Lazy Neato project.
+
 ## 1. Project Overview
 
 The goal of this project is to learn, experiment with, and gain overall familiarity
@@ -21,6 +23,8 @@ All sensors and hardware used are built into the Neato. No additional hardware o
 technology is used, but advanced software techniques, including RANSAC, shape
 fitting, line detection, data filtering, and proportional control, are adopted
 and used in practice.
+
+Jack mainly worked on the state machine and organizing the structure of our deliverables as well as the safety node. Enzo contributed mainly to the development of the cookie following behavior as well as outlining the basis of all the other files. Irene mainly contributed to the wall following behavior. All members came together during work meetings to discuss ideas and implemented them independently on their own time. This README, which is our report, was co-developed by all three members with their respective behaviors. 
 
 ## 2. Individual Behaviors
 
@@ -464,8 +468,10 @@ Additionally, the 1 s startup delay is a guess and has not been verified. If the
 
 ## 4. Learning Objectives and Final Takeaways
 
-Enzo - 
+Enzo - Through the development of this project, I've been able to learn much more about the fundamentals of ROS programming and develop a better intuition for how to approach problems with this mindset. Through working on cookie following, I've had the opportunity to encounter problems that arise under unique environments. For example, my earlier iterations of the RANSAC algorithm worked when the cookie was the only thing the lidar saw, and then when I added another object, it didn't work as well. Then, adding four walls made it even worse. Through this, I learned how important it is to treat the last step as the first when thinking about developing my algorithms so that I don't have to encounter the problem before I solve it. Additionally, I learned more about transforms, although this did not greatly impact the algorithms I implemented. Unfortunately, I also have developed a better understanding of categorizing the problems I encounter into either solvable or non-solvable problems. For instance, I assume that I have an estimated 10 hours attempting to debug problems that arose from the SDF file of the Neato. Originally, I had lidar issues since the Neato was in the floor at times. Then, after I attempted to fix the SDF, I removed that issue but silently introduced another issue with wheel turning that I hadn't realized, so when I worked on the project at a later time, things that had worked prior seemingly were broken. Overall, through just the experience of trying to get everything to work, I've exposed myself to so many elements of the robotics experience that I feel more comfortable moving forward with any project. 
+
 Irene - 
+
 Jack - 
 
 ## 5. How To Run
