@@ -15,6 +15,7 @@ variety of real-life robotic behaviors, such as:
 - [Driving in a square](#driving-in-a-square)
 - [Wall following](#wall-following)
 - [Cookie following](#cookie-following)
+- [Collision avoidance / safety e-stop](#collision-avoidance)
 
 All sensors and hardwares used are built in the Neato. No additional hardware or
 technology is used. But advanced software techniques including RANSAC, shape
@@ -30,15 +31,38 @@ created as part of your finite-state-machine should also be described here.
 
 ### <a name="driving-in-a-square" id="driving-in-a-square"></a>Driving in a Square
 
-- **Description & Intent:** [High-level description of the square driving
-  behavior and what it intends to accomplish.]
-- **Implementation Details:** [Topics subscribed to, topics published to (e.g.,
-  `/cmd_vel`), timer callbacks/threading, odometry/time-based turning
-  strategies, and testing/debugging tools used.]
-- **Key Design Decisions:** [Summary of key architectural decisions, parameters
-  tuned, and technical justifications.]
-- **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the
-  behavior, along with a link to the relevant `rosbag` file.]
+#### Description
+
+This behavior does exactly what the name suggests, which is having the Neato
+drive in a square. The Neato will complete the square exactly once and be back
+at the initial state with the roughly the same position and orientation.
+
+#### Design & Implementation
+
+The implementation of this behavior is time-based, where the Neato would drive
+and turn at a pre-configured speed and duration in order to complete the square.
+This results in an essentially open-loop control, where the robot drifts
+overtime when it is completing the third to fourth side of the square, as shown
+in the image below. This can be fixed by adopting a closed-loop control
+technique by calculating odometry and using sensor information to correct the
+trajectories overtime. However, we decided to use a simpler time-based approach
+for this behavior for simplicity to have more time for other behaviors in this
+projects to meet our individual learning goals.
+
+There are no other topics subscribed to besides the `/state` topic for FSM
+control. However, upon finishing drawing a square, this node will publish the
+`/drive_square_completed` topic to indicate the completion of this behavior to
+the FSM controller. This is an intentional design decision where we avoided
+adding additional states to the `/state` topics for better organization. The FSM
+controller, which will be touched on in later section, is designed to be the
+only node that can write and publish to the `/state` topic to maintain clarity
+and state management. Therefore we use another separate topic to indicate the
+completion of this behavior and let the FSM controller perform the state
+transition.
+
+<p align="center">
+  <img src="docs/square_drive.gif" alt="Neato driving in a square">
+</p>
 
 ### <a name="wall-following" id="wall-following"></a>Wall Following
 
@@ -63,6 +87,40 @@ created as part of your finite-state-machine should also be described here.
   limits, and technical justifications.]
 - **Visuals & Demonstration:** [Figure, GIF, or embedded video demonstrating the
   behavior, along with a link to the relevant `rosbag` file.]
+
+### <a name="collision-avoidance" id="collision-avoidance"></a>Collision Avoidance / Safety E-Stop
+
+- **Description & Intent:** The `safety` node (`safety.py`) sits between every
+  other behavior node and the robot: it acts as a safety gate that all velocity
+  commands must pass through before actually reaching the Neato. Its job is to
+  guarantee the robot stops immediately if it physically bumps into something,
+  if it's commanded into the `STOP` state, or if commands stop arriving
+  altogether (e.g., a crashed or hung behavior node).
+- **Implementation Details:** The node subscribes to `desired_cmd_vel` (the
+  "requested" velocity published by whichever behavior node is currently
+  active), `bump` (the Neato's bumper sensor, `neato2_interfaces/msg/Bump`), and
+  `state` (the FSM's current state), and publishes the final, gated velocity to
+  `cmd_vel`. On `desired_cmd_vel_callback`, it forwards the message to `cmd_vel`
+  unless the bumper is currently triggered, in which case it publishes a zero
+  `Twist` instead. `bump_callback` latches `hit_bump` to `True` if any of the
+  four bump sensors (left front/side, right front/side) fire, and immediately
+  stops the robot. A periodic timer (`timecheck`, 10 Hz) also stops the robot if
+  no `desired_cmd_vel` message has arrived within a 1-second `TIMEOUT`, guarding
+  against a stalled upstream node. When the FSM publishes `state == "STOP"`, the
+  node stops immediately; any other state change clears the latched `hit_bump`
+  flag so the robot isn't stuck refusing to move after backing away from an
+  obstacle.
+- **Key Design Decisions:** Collision avoidance is implemented as a downstream
+  safety gate rather than inside each behavior node, so every behavior (driving
+  in a square, wall following, cookie following) automatically gets e-stop
+  protection without duplicating bump-handling logic. The bumper trigger is
+  latched (not just checked once) so a single bump reliably halts motion until
+  the state is manually changed, rather than being overridden by the very next
+  velocity command. The 1-second command timeout is a defensive measure
+  independent of the bumper, meant to catch software/communication failures
+  rather than physical obstacles.
+- **Visuals & Demonstration:** See the recorded bag at
+  [`bags/collision_avoidance`](bags/collision_avoidance).
 
 ## Finite State Machine
 
