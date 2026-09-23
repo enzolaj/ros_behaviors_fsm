@@ -10,6 +10,9 @@ class FiniteStateController(Node):
         self.drive_square_done_sub = self.create_subscription(
             String, "drive_square_done", self.drive_square_done_callback, 10
         )
+
+        # have extra info just in case for future developments
+        # these numbers are not used right now
         self.cookies_found_sub = self.create_subscription(
             Int32, "cookies_found", self.cookies_found_callback, 10
         )
@@ -54,6 +57,7 @@ class FiniteStateController(Node):
         if self.current_state == "COOKIE_FOLLOW":
             self.set_state("DRIVE_SQUARE")
 
+    # menu for manual control of the state
     def print_menu(self):
         print("""
 =============================
