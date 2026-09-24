@@ -327,7 +327,7 @@ RANSAC runs in the lidar frame. Based on the output of `tf2_echo base_link base_
 \begin{bmatrix} x_b \\ y_b \end{bmatrix} = \begin{bmatrix} -0.084 - c_x \\ -c_y \end{bmatrix}, \qquad \rho = \sqrt{x_b^2 + y_b^2}, \qquad \beta = \mathrm{atan2}(y_b, x_b),
 ```
  
-where $\beta$ is the bearing. This initially caused an issue with the debugging visualization: the marker always appeared flipped relative to the lidar points, even though the actuation logic worked correctly. This was because the rotation of the lidar by $\pi$ was negated by the fact that the first scan, as detailed within `msg.`
+where $\beta$ is the bearing. This initially caused an issue with the debugging visualization: the marker always appeared flipped relative to the lidar points, even though the actuation logic worked correctly. This was because the rotation of the lidar by $\pi$ was negated by the fact that the first scan, as detailed within `msg.angle_min` from the Neato documentation on the class site, is recorded as $-\pi$.
  
 #### 2.3.8 Control
  
