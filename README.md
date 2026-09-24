@@ -21,7 +21,7 @@ variety of real-life robotic behaviors, such as:
 
 All sensors and hardware used are built into the Neato. No additional hardware or
 technology is used, but advanced software techniques, including RANSAC, shape
-fitting, line detection, data filtering, and proportional control, are adopted
+fitting, data filtering, and proportional control, are adopted
 and used in practice.
 
 Jack mainly worked on the state machine and organizing the structure of our deliverables as well as the safety node. Enzo contributed mainly to the development of the cookie following behavior as well as outlining the basis of all the other files. Irene mainly contributed to the wall following behavior. All members came together during work meetings to discuss ideas and implemented them independently on their own time. This README, which is our report, was co-developed by all three members with their respective behaviors. 
@@ -64,9 +64,9 @@ The drive-square behavior is implemented through a simple time-based approach. T
  
 The node's only input is the `/state` topic. It publishes velocity commands on `/desired_cmd_vel` and, once the square is finished, a completion message on `/drive_square_done`. We used a separate completion topic rather than letting the node write to `/state` itself so that the FSM controller remains the only node that ever changes the state. The square node reports that it is done, and the controller decides what happens next.
 
-In the `state_callback` function, we check if the value of `is_active` is equal to the previous one, which means that we only activate on a state change and not on every state message. This architecture is used for actuation in the other behaviors as well.
+In the `state_callback` function, we compare the new value of `is_active` with the previous one, which means that we only activate on a state change and not on every state message. This architecture is used for actuation in the other behaviors as well.
  
-The motion itself runs in `run_loop`, which uses a 10 Hz timer to send its messages. If the node is inactive, the callback returns immediately and publishes nothing. Otherwise, it calls `compute_command`, which checks how long the current phase has lasted. In a `TURN` phase, the node commands `turn_speed` until `turn_duration` s have elapsed, then switches to `DRIVE`. In a `DRIVE` phase, it commands `drive_speed` until `drive_duration` s have elapsed, then increments `turns_completed` and switches back to `TURN`. Each switch records a new phase start time.
+The motion itself runs in `run_loop`, which uses a 10 Hz timer to send its messages. If the node is inactive, the callback returns immediately and publishes nothing. Otherwise, it calls `compute_command`, which checks how long the current phase has lasted. In a `TURN` phase, the node commands `turn_speed` until `turn_duration` s have elapsed, then switches to `DRIVE`. In a `DRIVE` phase, it commands `forward_speed` until `drive_duration` s have elapsed, then increments `turns_completed` and switches back to `TURN`. Each switch records a new phase start time.
  
 The square begins with a turn rather than a drive. When the robot enters `SQUARE_DRIVE` right after eating a cookie, the cookie is still directly ahead, so driving first would run into it.
  
@@ -82,9 +82,11 @@ Additionally, we tuned the durations by observation rather than deriving them. T
 
 <p align="center"> <img src="docs/square_drive.gif" alt="Neato driving in a square"> </p> <p align="center"><em>Figure 1: Neato driving in a square.</em></p>
 
+See the recorded bag at [`bags/drive_square`](bags/drive_square).
+
 ### <a name="wall-following" id="wall-following"></a>2.2 Wall Following
 
-Basic wall following was implemented under the assumption that the walls were relatively connected, with easily identifiable corners, and did not contain small corridors. For ease of transition from the `drive_square` behavior to `wall_following`, the Neato drives parallel to the left side of the wall. However, the side of the wall is not hardcoded in the wall-following controller. The variable `self.side` determines which side is followed, allowing the Neato to trace either side of the wall if desired.
+Basic wall following was implemented under the assumption that the walls were relatively connected, with easily identifiable corners, and did not contain small corridors. For ease of transition from the `drive_square` behavior to `wall_following`, the Neato follows the wall on its right side. The ray indices are currently set for the right wall; `self.side` sets the direction of the corner turn, and following the left wall would use indices 90 and 70 instead.
 
 The wall-following module uses incoming `LaserScan` messages from the `/scan` topic to determine whether the Neato should continue following the wall or turn at an upcoming corner. Both parallel drive and corner handling determine angular velocity, while linear velocity is constant at $0.2\,\mathrm{m/s}$.
 
@@ -195,10 +197,10 @@ keeping its response bounded. Therefore, if the two walls are not completely adj
 The controller output is
 
 $$
-\omega = K_e e_{\mathrm{capped}} + K_\alpha\alpha,
+\omega = -\left(K_e e_{\mathrm{capped}} + K_\alpha\alpha\right),
 $$
 
-with the sign adjusted according to the selected wall-following side. The resulting angular velocity, `steer`, is also clamped:
+for the right wall, matching the control law in Section 2.2.1. The resulting angular velocity, `steer`, is also clamped:
 
 $$
 \omega_{\mathrm{cmd}} = \max\left(-\omega_{\max},\ \min(\omega_{\max},\ \omega)\right),
@@ -207,7 +209,7 @@ $$
 where
 
 $$
-\omega_{\max} = \pm 1\,\mathrm{rad/s}
+\omega_{\max} = 1\,\mathrm{rad/s}
 $$
 
 to ensure a safe, stable, and feasible turn.
@@ -227,6 +229,8 @@ A binary trigger was used to determine if the distance from the wall was under a
 </p>
 <p align="center"><em>Figure 2: The wall-following behavior sped up 3x. Note the visualized wall triangle and history of wall points.</em></p>
 
+See the recorded bag at [`bags/wall_following`](bags/wall_following).
+
 ### <a name="cookie-following" id="cookie-following"></a>2.3 Cookie Following
 
 The goal of this behavior was to detect a circular object of known radius $R = 0.25$ m anywhere in the 360-degree scan, publish detection events to the controller, and, when active, drive to the object and report arrival, meaning that the cookie has been "eaten." These two functions run on separate schedules: the scan callback, which searches for and reports the cookie, is always active regardless of state, while driving is active only when the node's state is active. In other words, perception and actuation are decoupled in this node.
@@ -241,7 +245,7 @@ We employed the RANSAC (random sample consensus) algorithm for circle fitting to
 
 This node subscribes to two topics and publishes to four, all of which are detailed in the table below.
 
-*Table 1: Cookie-following node topics; subscribers and publishers with their roles and when they're called.*
+*Table 3: Cookie-following node topics; subscribers and publishers with their roles and when they're called.*
 
 | Topic              | Direction | Message type                | When                                                              | Role                                                                             |
 | ------------------ | --------- | --------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -254,13 +258,13 @@ This node subscribes to two topics and publishes to four, all of which are detai
 
 The following table shows the parameters used in the cookie-following node and their impact on the behavior. Most of these parameters were initially chosen from a quick Google search and intuition and did not go through extensive testing to optimize performance.
 
-*Table 2: Cookie-following parameters.*
+*Table 4: Cookie-following parameters.*
 
 | Parameter                   | Value              | Role                                                   |
 | --------------------------- | ------------------ | ------------------------------------------------------ |
 | `target_radius`             | 0.25 m             | $R$ - radius the fitted circle must match              |
 | `radius_tol`                | 0.03 m             | tolerance on the fitted circle's radius difference     |
-| `inlier_tol`                | 0.02 m             | how far off the circle a point can be and still count  |
+| `inlier_tol`                | 0.03 m             | how far off the circle a point can be and still count  |
 | `ransac_iterations`         | 200                | $K$ - iterations of the algorithm to find the circle   |
 | `min_inliers`               | 6                  | minimum support                                        |
 | `sample_radius`             | 0.5 m              | $2R$ neighborhood                                      |
@@ -283,7 +287,7 @@ Next, the callback transforms the center into the robot frame and computes the c
 
 #### 2.3.3 Algorithm
 
-On each scan, the node converts the valid ranges to Cartesian points in the lidar frame and then performs $K = 200$ iterations of the following logic. In each iteration, it selects a random point $p_1$ and collects all points (by iterating through the point list) within $2R$ of it; this is the local neighborhood of the point. If the neighborhood contains fewer than two points, the iteration is skipped. It then selects $p_2$ and $p_3$ at random from the neighborhood and fits the circumcircle of the three points. This candidate is rejected if the points are nearly collinear (explained in the next section), if $|r - R| > 0.03$ m, or if the center is not farther from the sensor than $p_1$. Otherwise, the node counts the inliers, defined as scan points whose distance to the center lies within 0.02 m of $r$ (essentially, the other points on the circle), and stores this candidate as the best fit if it has the most inliers (a fit must have at least six to be valid). After all iterations, the node reports the best center (in the case of a tie, it keeps the earlier fit) or no detection.
+On each scan, the node converts the valid ranges to Cartesian points in the lidar frame and then performs $K = 200$ iterations of the following logic. In each iteration, it selects a random point $p_1$ and collects all points (by iterating through the point list) within $2R$ of it; this is the local neighborhood of the point. If the neighborhood contains fewer than two points, the iteration is skipped. It then selects $p_2$ and $p_3$ at random from the neighborhood and fits the circumcircle of the three points. This candidate is rejected if the points are nearly collinear (explained in the next section), if $|r - R| > 0.03$ m, or if the center is not farther from the sensor than $p_1$. Otherwise, the node counts the inliers, defined as scan points whose distance to the center lies within 0.03 m of $r$ (essentially, the other points on the circle), and stores this candidate as the best fit if it has the most inliers (a fit must have at least six to be valid). After all iterations, the node reports the best center (in the case of a tie, it keeps the earlier fit) or no detection.
 
 #### 2.3.4 Circumcircle
 
@@ -309,7 +313,7 @@ Local sampling assumes that no other surface lies within $2R = 0.5$ m of the coo
 
 The farther away the circle is, the fewer lidar points land on it. Intuitively, the lidar has a 1-degree angular resolution, so if you picture 360 rays spaced 1 degree apart extending from the lidar, neighboring rays are closer together on a circle 1 m away than on a circle 5 m away. Mathematically, a circle of radius $R$ whose center lies at distance $\rho$ subtends an angle $\alpha = 2\arcsin(R/\rho)$ as seen by the lidar on the Neato body. This can be derived from the geometry of the lidar and the circle. The two outermost points on the circle lie on the tangent rays from the lidar. Since every tangent line meets a circle at a right angle to the radius, the cookie's center, the tangent point, and the lidar form a right triangle. The hypotenuse is $\rho$, the distance from the lidar to the center of the circle, and the side opposite the angle at the lidar is $R$, from the center to the tangent point. This gives $\sin(\alpha/2) = R/\rho$; the angle is halved because this right triangle covers only half of the cookie, and by symmetry the full subtended angle is $\alpha = 2\arcsin(R/\rho)$. This yields a mapping from the distance of the circle to the maximum number of points that can lie on it, shown below.
 
-*Table 3: Maximum cookie points versus distance. The drop-off is steepest at close range but continues to matter at every distance.*
+*Table 5: Maximum cookie points versus distance. The drop-off is steepest at close range but continues to matter at every distance.*
 
 | $\rho$ (m) | 1 | 2 | 3 | 4 |
 |---|---|---|---|---|
@@ -337,7 +341,7 @@ The linear and angular velocity commands are as follows:
 v = \min(0.2,\; 0.5\,\rho), \qquad \omega = \mathrm{clamp}(0.9\,\beta,\ \pm 6.7),
 ```
 
-and otherwise the node stops the robot. The control law is essentially constant-speed pursuit with an added proportional steering term. Looking back, we realize that the linear speed term always saturates for $\rho > 0.4$ m, and the robot only drives when $\rho > 0.65$ m, so the speed is effectively a constant 0.2 m/s throughout the state. Since $|\beta| \le \pi$, the clamp does work effectively for the angular speed. The 0.65 m stopping distance is measured to the cookie's center, which leaves 0.40 m between the Neato and the cookie's surface.
+and otherwise the node stops the robot. The control law is essentially constant-speed pursuit with an added proportional steering term. Looking back, we realize that the linear speed term always saturates for $\rho > 0.4$ m, and the robot only drives when $\rho > 0.65$ m, so the speed is effectively a constant 0.2 m/s throughout the state. Since $|\beta| \le \pi$, the commanded angular speed never exceeds $0.9\pi \approx 2.83$ rad/s, so the 6.7 rad/s clamp never engages in practice. The 0.65 m stopping distance is measured to the cookie's center, which leaves 0.40 m between the Neato and the cookie's surface.
 
 #### 2.3.9 Limitations
 
@@ -358,6 +362,8 @@ Overall, many of these issues stem from small oversights in our planning phase a
 </p>
 <p align="center"><em>Figure 3: The cookie-following behavior sped up 3x. Note the translucent red circle representing the cookie fitted to the surface of the arc.</em></p>
 
+See the recorded bag at [`bags/cookie_following`](bags/cookie_following).
+
 ### <a name="collision-avoidance" id="collision-avoidance"></a>2.4 Collision Avoidance / Safety E-Stop
 
 #### 2.4.1 Description & Intent
@@ -376,13 +382,13 @@ The node subscribes to `desired_cmd_vel` (the
 active), `bump` (the Neato's bumper sensor, `neato2_interfaces/msg/Bump`), and
 `state` (the FSM's current state), and publishes the final, gated velocity to
 `cmd_vel`. In `desired_cmd_vel_callback`, it forwards the message to `cmd_vel`
-unless the bumper is currently triggered, in which case it publishes a zero
-`Twist` instead. `bump_callback` latches `hit_bump` to `True` if any of the
+unless a bump has been latched or the state is `STOP`, in which case it publishes
+a zero `Twist` instead. `bump_callback` latches `hit_bump` to `True` if any of the
 four bump sensors (left front/side, right front/side) fire, and immediately
 stops the robot. A periodic timer (`timecheck`, 10 Hz) also stops the robot if
 no `desired_cmd_vel` message has arrived within a 1-second `TIMEOUT`, guarding
-against a stalled upstream node. When the FSM publishes `state == "STOP"`, the
-node stops immediately; any other state change clears the latched `hit_bump`
+against a stalled upstream node; it stops once per timeout rather than on every tick. When the FSM publishes `state == "STOP"`, the
+node stops immediately and blocks all commands until another state is selected; any other state change clears the latched `hit_bump`
 flag so the robot isn't stuck refusing to move after backing away from an
 obstacle.
 
@@ -393,7 +399,7 @@ safety gate rather than inside each behavior node, so every behavior (driving
 in a square, wall following, cookie following) automatically gets e-stop
 protection without duplicating bump-handling logic. The bumper trigger is
 latched (not just checked once) so that a single bump reliably halts motion until
-the state is manually changed, rather than being overridden by the very next
+the state changes (through an FSM transition or keyboard input), rather than being overridden by the very next
 velocity command. The 1-second command timeout is a defensive measure
 independent of the bumper, meant to catch software/communication failures
 rather than physical obstacles.
@@ -418,8 +424,8 @@ The system is made up of five nodes:
 - `finite_state_controller`: owns the current state, publishes it on `/state`, and performs every transition.
 - `drive_square`: drives one open-loop square and reports completion.
 - `wall_following`: follows the wall on the robot's right.
-- `cookie_following`: detects cookies in every state and drives to one when active.
-- `safety_node`: the only node that publishes to `/cmd_vel`; acts as a safety filter for robot commands.
+- `cookie_follow`: detects cookies in every state and drives to one when active.
+- `safety`: the only node that publishes to `/cmd_vel`; acts as a safety filter for robot commands.
 
 The controller node does not command the behaviors directly. It publishes a single state string, and each behavior node compares that string to its own state name and turns itself on or off. The behaviors report events back to the controller on their own topics, and the controller decides whether each event causes a transition.
 
@@ -428,16 +434,16 @@ The diagram showing the overall FSM structure is below:
 <p align="center">
   <img src="docs/info_flow_comprobo.png" alt="Information flow between nodes" width="900">
 </p>
-<p align="center"><em>Figure 3: Information flow between the nodes.</em></p>
+<p align="center"><em>Figure 4: Information flow between the nodes.</em></p>
 
-*Table 8: State transitions.*
+*Table 6: State transitions.*
 
 | From             | To               | Trigger              | Sent by                     | Condition at sender                           |
 | ---------------- | ---------------- | -------------------- | --------------------------- | --------------------------------------------- |
 | (startup)        | `SQUARE_DRIVE`   | one-shot 1 s timer   | `finite_state_controller`   | startup delay elapsed                         |
 | `SQUARE_DRIVE`   | `WALL_FOLLOWING` | `/drive_square_done` | `drive_square`              | fourth side complete                          |
-| `WALL_FOLLOWING` | `COOKIE_FOLLOW`  | `/cookies_found`     | `cookie_following`          | first detection of a new cookie               |
-| `COOKIE_FOLLOW`  | `SQUARE_DRIVE`   | `/cookies_eaten`     | `cookie_following`          | active and within 0.65 m of the cookie center |
+| `WALL_FOLLOWING` | `COOKIE_FOLLOW`  | `/cookies_found`     | `cookie_follow`             | first detection of a new cookie               |
+| `COOKIE_FOLLOW`  | `SQUARE_DRIVE`   | `/cookies_eaten`     | `cookie_follow`             | active and within 0.65 m of the cookie center |
 | any              | any              | keyboard `0`–`3`     | controller input thread     | operator input                                |
 
 The diagram showcasing the transition logic is below:
@@ -445,11 +451,11 @@ The diagram showcasing the transition logic is below:
 <p align="center">
   <img src="docs/state_flow_comprobo.png" alt="State machine transitions" width="800">
 </p>
-<p align="center"><em>Figure 4: State transitions of the finite-state controller.</em></p>
+<p align="center"><em>Figure 5: State transitions of the finite-state controller.</em></p>
  
 ### 3.2 Architecture
  
-*Table 9: Finite-state controller topics; subscribers and publishers with their roles and when they're called.*
+*Table 7: Finite-state controller topics; subscribers and publishers with their roles and when they're called.*
  
 | Topic                | Direction | Message type      | When                                                                  | Role                                                             |
 | -------------------- | --------- | ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -458,7 +464,7 @@ The diagram showcasing the transition logic is below:
 | `/cookies_found`     | subscribe | `std_msgs/Int32`  | first detection of a new cookie                                       | `WALL_FOLLOWING` to `COOKIE_FOLLOW`                              |
 | `/cookies_eaten`     | subscribe | `std_msgs/Int32`  | once per cookie, on arrival                                           | `COOKIE_FOLLOW` to `SQUARE_DRIVE`                                |
  
-*Table 10: Finite-state controller parameters.*
+*Table 8: Finite-state controller parameters.*
  
 | Parameter          | Value                                                    | Role                                         |
 | ------------------ | -------------------------------------------------------- | -------------------------------------------- |
@@ -471,20 +477,22 @@ The diagram showcasing the transition logic is below:
 The controller is implemented in `finite_state_controller.py` as the `FiniteStateController` node. It stores the current state as a string in `current_state`, and every change goes through a single method, `set_state()`, which updates `current_state`, publishes the new value on `/state`, and prints it to the terminal. Because nothing else publishes on `/state`, the terminal output is a complete log of every transition the robot made.
  
  
-The keyboard menu runs in a separate thread started in the arbiter. `terminal_input_loop` prints the menu, blocks on `input()`, maps `1`, `2`, `3`, and `0` to `SQUARE_DRIVE`, `WALL_FOLLOWING`, `COOKIE_FOLLOW`, and `STOP`, respectively, and calls `set_state()` directly. Running it in its own thread lets the menu wait for input while `rclpy.spin()` keeps servicing the event callbacks on the main thread. Marking it as a daemon lets the program exit without waiting for the blocked `input()` call to return. Invalid input prints an error and redisplays the menu without changing the state.
+The keyboard menu runs in a separate thread started in the controller's constructor. `terminal_input_loop` prints the menu, blocks on `input()`, maps `1`, `2`, `3`, and `0` to `SQUARE_DRIVE`, `WALL_FOLLOWING`, `COOKIE_FOLLOW`, and `STOP`, respectively, and calls `set_state()` directly. Running it in its own thread lets the menu wait for input while `rclpy.spin()` keeps servicing the event callbacks on the main thread. Marking it as a daemon lets the program exit without waiting for the blocked `input()` call to return. Invalid input prints an error and redisplays the menu without changing the state.
  
  
 ### 3.4 Limitations
  
-As mentioned in the individual behavior sections, our state machine has many limitations and unhandled edge cases. The controller has no way out of `COOKIE_FOLLOW` except eating a cookie. If the cookie is lost, the cookie-following node stops publishing velocity, and the robot sits still until a cookie reappears or an operator changes the state from the keyboard. Because the found event fires only at the start of a new track, a cookie first seen while the robot is still drawing its square is ignored by the controller and never triggers a transition later, even if it stays in view during wall following.
+As mentioned in the individual behavior sections, our state machine has many limitations and unhandled edge cases. The controller has no way out of `COOKIE_FOLLOW` except eating a cookie. If the cookie is lost, the cookie-following node publishes zero velocity, and the robot sits still until a cookie reappears or an operator changes the state from the keyboard. Because the found event fires only at the start of a new track, a cookie first seen while the robot is still drawing its square is ignored by the controller and never triggers a transition later, even if it stays in view during wall following.
  
 Additionally, the 1 s startup delay is a guess and has not been verified. If the delay were too short for the subscribers to connect, they would miss the initial state, and the state machine would never start cycling.
 
 ### 3.5 Demonstration
 <p align="center">
-  <img src="docs/fsm.gif" alt="Figure 4: The FSM cyclical behavior sped up 3x. Note it contains both visualization. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.">
+  <img src="docs/fsm.gif" alt="Figure 6: The FSM cyclical behavior sped up 3x. Both visualizations are shown. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.">
 </p>
-<p align="center"><em>Figure 4: The FSM cyclical behavior sped up 3x. Note it contains both visualization. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.</em></p>
+<p align="center"><em>Figure 6: The FSM cyclical behavior sped up 3x. Both visualizations are shown. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.</em></p>
+
+See the recorded bag at [`bags/fsm`](bags/fsm).
 
 ## 4. Learning Objectives and Final Takeaways
 
@@ -547,8 +555,8 @@ This will open RViz, which you can then add the special visualization topics:
 
 - `LaserScan` on `/scan`, to see the raw lidar points.
 - `Marker` on `/cookie_show`, to see the fitted cookie cylinder.
-- `MarkerArray` on `/wall_markers`, to see what the Neato thinks is the wall its following.
+- `MarkerArray` on `/wall_markers`, to see what the Neato thinks is the wall it's following.
 
 ## 6. Tool Usage
-Throughout the development of this project, we did use AI tools, such as LLMs, to assist with certain programming. We were conscious of the effect this had on our project and mainly used it to assist with the visualization aspects within our files. For example, I (Enzo) used Claude to help me understand what was the problem with my marker visualization in the cookie_follow.py file. This then helped me realize what was occurring between the frames and that is independent thought. 
-Furthermore, this write up was first written in Obsidian, with is a text editor with additional tools. This enhanced our ability to easily integrate tables in the `.md` format, as it was essentially just a fancier Google Docs for our purposes. Additionally, members have used certain AI to help scaffold their ideas and carve out higher level organization so they may focus on other details related to the project in writing. 
+Throughout the development of this project, we did use AI tools, such as LLMs, to assist with certain programming. We were conscious of the effect this had on our project and mainly used it to assist with the visualization aspects within our files. For example, I (Enzo) used Claude to help me understand what was the problem with my marker visualization in the cookie_follow.py file. This then helped me realize what was occurring between the frames; the reasoning after that was my own. 
+Furthermore, this write up was first written in Obsidian, which is a text editor with additional tools. This enhanced our ability to easily integrate tables in the `.md` format, as it was essentially just a fancier Google Docs for our purposes. Additionally, members have used certain AI to help scaffold their ideas and carve out higher level organization so they may focus on other details related to the project in writing.
