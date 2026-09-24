@@ -1,3 +1,9 @@
+"""Detects a cylindrical cookie of known radius in the lidar scan and drives to it.
+
+Detection runs in every state and reports new cookies on cookies_found. Driving
+runs only in the COOKIE_FOLLOW state, and reaching the cookie is reported on
+cookies_eaten.
+"""
 import math
 import random
  
