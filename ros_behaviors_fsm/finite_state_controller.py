@@ -11,6 +11,11 @@ from rclpy.node import Node
 from std_msgs.msg import String, Int32
 
 class FiniteStateController(Node):
+    """Publishes the current state and handles transitions between behaviors.
+
+    States: SQUARE_DRIVE, WALL_FOLLOWING, COOKIE_FOLLOW, and STOP.
+    """
+
     def __init__(self):
         """Initializes the node, starts the keyboard input thread, and schedules the first state publish."""
         super().__init__("finite_state_controller")
@@ -129,6 +134,7 @@ Enter choice: """, end="", flush=True)
 
 
 def main(args=None):
+    """Runs the state controller node."""
     rclpy.init(args=args)
     node = FiniteStateController()
     try:

@@ -1,3 +1,10 @@
+"""
+Follows the wall on the Neato's right side using lidar data.
+
+Active only in the WALL_FOLLOWING state. A controller on distance
+and heading error keeps the robot parallel to the wall, and a forward check
+triggers a turn at corners.
+"""
 import math
 
 import rclpy
@@ -16,9 +23,8 @@ from collections import deque
 
 class WallFollowerNode(Node):
     """This node uses triangulation with two lidar points (one perpendicular to the Neato and
-    another 20 degrees above) to follow the wall on its right or left side (depending on the
-    state specified. A single lidar point that is straight ahead determines when to turn for
-    corners."""
+    another 20 degrees ahead of it) to follow the wall on its right side. A single lidar point
+    that is straight ahead determines when to turn for corners."""
 
     def __init__(self):
         """Initializes node; sets subscribers and publishers; and triangulation and collision
@@ -61,15 +67,10 @@ class WallFollowerNode(Node):
         self.is_active = False
 
     def state_callback(self, msg):
-        """Determines if point within sensor's range. False for 0, inf, and NaN.
+        """Sets the node active only when the state is WALL_FOLLOWING.
 
         Args:
-            range_index (float): Index of lidar scan
-            msg (string): Incoming state message
-
-        Return:
-            Boolean: Whether or not the lidar scan straight ahead shows that a
-            wall is ahead (distance is below target_distance threshold).
+            msg (String): The current state published by the state machine.
         """
         was_active = self.is_active
         self.is_active = msg.data == "WALL_FOLLOWING"
@@ -79,43 +80,38 @@ class WallFollowerNode(Node):
 
     @staticmethod
     def valid_point(range_index, msg):
-        """Determines if point within sensor's range. False for 0, inf, and NaN.
+        """Determines if a range is within the sensor's limits. False for 0, inf, and NaN.
 
         Args:
-            range_index (float): Index of lidar scan
-            msg (string): Incoming state message
+            range_index (float): Range reading from the lidar scan, in meters.
+            msg (LaserScan): The scan the reading came from.
 
-        Return:
-            Boolean: Whether or not the lidar scan straight ahead shows that a
-            wall is ahead (distance is below target_distance threshold).
+        Returns:
+            bool: True if the reading is valid.
         """
         return msg.range_min < range_index < msg.range_max
 
     def wall_ahead(self, msg):
-        """
-        Determines if lidar data traight ahead of Neato is under certain threshold.
+        """Determines if the lidar reading straight ahead of the Neato is under a threshold.
+
         If so, there is a wall ahead.
 
         Args:
-            msg (string): Incoming state message
-        Return:
-            Boolean
+            msg (LaserScan): The incoming lidar scan.
+
+        Returns:
+            bool: True if a wall is within 4 * target_distance ahead.
         """
         x = msg.ranges[0]
-        if x > 4 * self.target_distance:
-            pass
-        else:
-            return True
+        # ignore 0 / inf readings so a bad point doesn't count as a wall
+        return self.valid_point(x, msg) and x <= 4 * self.target_distance
 
 
     def scan_callback(self, msg):
-        """Updates command velocity.
+        """Computes and publishes the steering command from the latest scan.
 
         Args:
-            msg (string): Incoming state messages.
-
-        Return:
-            None
+            msg (LaserScan): The incoming lidar scan.
         """
         # Do not run or publish commands if we are not the active state
         if not self.is_active:
@@ -132,7 +128,7 @@ class WallFollowerNode(Node):
         if not (self.valid_point(a, msg) and self.valid_point(b, msg)):
             cmd.angular.z = 0.0
             self.cmd_vel_pub.publish(cmd)
-            return cmd
+            return
 
         theta = math.radians(20) # hardcoded based on a,b
 
@@ -169,11 +165,14 @@ class WallFollowerNode(Node):
 
     @staticmethod
     def polar_to_point(range_index, angle):
-        """Transform points from polar to cartesian.
+        """Transforms a point from polar to Cartesian coordinates.
 
         Args:
-            range_index (float): Index of lidar scan
-            angle (int): Angle of lidar scan in degrees
+            range_index (float): Range reading from the lidar scan, in meters.
+            angle (int): Angle of the reading in degrees.
+
+        Returns:
+            Point: The point in the laser frame, before the 180 deg flip in publish_markers.
         """
         return Point(x = range_index * math.cos(math.radians(angle)),
                      y = range_index * math.sin(math.radians(angle)),
@@ -183,7 +182,7 @@ class WallFollowerNode(Node):
 # LLMs were used to write the framework for these visualization functions. Debugging and revisions were done on our own.
     @staticmethod
     def marker(frame, marker_id, marker_type):
-        """Making marker with necessary fields, rest is filled in with caller."""
+        """Creates a marker with the shared fields filled in. The caller sets the rest."""
         m = Marker()
         m.header.frame_id = frame # stamp at 0, use latest transform
         m.ns = "wall_follower"
@@ -195,7 +194,7 @@ class WallFollowerNode(Node):
         return m
 
     def to_fixed_frame(self, points, frame):
-        """Visualize points given in 'frame' in fixed frame. [] if TF not ready."""
+        """Transforms points given in 'frame' into the fixed frame. [] if TF not ready."""
         try:
             tf = self.tf_buffer.lookup_transform(self.fixed_frame, frame, Time())
         except TransformException as e:
@@ -205,7 +204,7 @@ class WallFollowerNode(Node):
 
 
     def publish_markers(self, frame, point_b, point_a):
-        """Publish markers showing current lidar points and last 200 scans."""
+        """Publishes markers showing the current lidar points and the last 200 hits."""
         origin = Point(x=0.0, y=0.0, z=0.0)
 
         # Point has no arithmetic operators, so negate x and y explicitly (180 deg about z)
@@ -237,6 +236,7 @@ class WallFollowerNode(Node):
 
 
 def main(args=None):
+    """Runs the node and sends a zero velocity on shutdown."""
     rclpy.init(args=args)
     node = WallFollowerNode()
     try:

@@ -26,7 +26,7 @@ class SafetyNode(Node):
     # timeout duration when no commands are sent anymore for a while for any software or communication failure reasons
     TIMEOUT = Duration(seconds=1.0)
     def __init__(self):
-        """Initializes the node and creates the publisher, subscribers, and timeout timer"""
+        """Initializes the node and creates the publisher, subscribers, and timeout timer."""
         super().__init__('safety_node')
         self.cmd_vel_pub = self.create_publisher(Twist, "cmd_vel", 10)
         self.create_subscription(Twist, "desired_cmd_vel", self.desired_cmd_vel_callback, 10)
@@ -40,11 +40,10 @@ class SafetyNode(Node):
         self.timer = self.create_timer(0.1, self.timecheck) # periodically checks if the commands is idle
 
     def bump_callback(self, msg):
-        """
-        Latches hit_bump and stops the neato if any of the bump sensors are triggered.
-        args:
+        """Latches hit_bump and stops the neato if any of the bump sensors are triggered.
+
+        Args:
             msg (Bump): The incoming bump sensor message.
-        returns: None
         """
         # stop if any of the bump is triggered
         # only set to true here so it doesnt reset when the bumper gets released
@@ -53,11 +52,10 @@ class SafetyNode(Node):
             self.stop()
 
     def desired_cmd_vel_callback(self, msg):
-        """
-        Forwards the desired velocity to cmd_vel unless the bumper was hit or we are in STOP.
-        args:
+        """Forwards the desired velocity to cmd_vel unless the bumper was hit or we are in STOP.
+
+        Args:
             msg (Twist): The velocity requested by the active behavior node.
-        returns: None
         """
         self.last_desired_vel_time = self.get_clock().now()
         # stop if bumper is triggered currently
@@ -82,11 +80,10 @@ class SafetyNode(Node):
         print("STOPPING")
 
     def state_callback(self, msg):
-        """
-        Stops on the STOP state, otherwise clears the bump latch so behaviors can drive again.
-        args:
+        """Stops on the STOP state, otherwise clears the bump latch so behaviors can drive again.
+
+        Args:
             msg (String): The incoming state message.
-        returns: None
         """
         if msg.data == "STOP":
             # keep blocking commands until we get a different state
@@ -99,6 +96,7 @@ class SafetyNode(Node):
 
 
 def main(args=None):
+    """Runs the node and sends a zero velocity on shutdown."""
     rclpy.init(args=args)
     node = SafetyNode()
     try:

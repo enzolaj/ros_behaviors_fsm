@@ -5,15 +5,17 @@ Active only in the SQUARE_DRIVE state. Each corner is a timed turn and each
 side is a timed drive. After four sides, the node publishes on
 drive_square_done so the state machine can move to WALL_FOLLOWING.
 """
-import math
-
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
 from std_msgs.msg import String
 
 class DriveSquareNode(Node):
+    """Drives one square by alternating timed TURN and DRIVE phases.
+
+    The square starts with a turn so the robot does not drive into the cookie
+    it just reached.
+    """
 
     def __init__(self):
         """Initializes the node, the square timing parameters, and the publishers and subscribers."""
@@ -26,7 +28,6 @@ class DriveSquareNode(Node):
         # hardcoded, measured by visually testing how long it takes complete 1m driving/90 turning
         self.drive_duration = 3  # seconds
         self.turn_duration = 2.7  # seconds
-        self.pause_duration = 0.5
 
         # A square has 4 sides and corners to turn; each side is one DRIVE phase + one TURN phase
         self.turns_completed = 0
@@ -128,6 +129,7 @@ class DriveSquareNode(Node):
         self.cmd_vel_pub.publish(cmd)
 
 def main(args=None):
+    """Runs the node and sends a zero velocity on shutdown."""
     rclpy.init(args=args)
     node = DriveSquareNode()
     try:

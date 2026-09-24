@@ -22,7 +22,7 @@ class CookieFollowNode(Node):
     Finding always runs and counts cookies found; moving and counting cookies eaten only happen when active."""
  
     def __init__(self):
-        """Initializes the node, sets RANSAC parameters, and creates the publishers and subscribers"""
+        """Initializes the node, sets RANSAC parameters, and creates the publishers and subscribers."""
         super().__init__("cookie_following")
  
         # radius of the cookie, radius filter value
@@ -68,7 +68,7 @@ class CookieFollowNode(Node):
         self.eaten = False
  
         # ransac flickers sometimes, so only call the cookie lost after a few empty scans in a row
-        # 5 Hz scan rate = 5 misses is about 1 s
+        # 5 Hz scan rate = 10 misses is about 2 s
         self.miss_count = 0
         self.max_misses = 10
 
@@ -83,11 +83,10 @@ class CookieFollowNode(Node):
         self.scan_sub = self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
  
     def state_callback(self, msg):
-        """
-        Updates the active state of the node based on incoming state messages.
-        args:
+        """Updates the active state of the node based on incoming state messages.
+
+        Args:
             msg (String): The incoming state message.
-        returns: None
         """
         was_active = self.is_active
         self.is_active = msg.data == "COOKIE_FOLLOW"
@@ -97,12 +96,13 @@ class CookieFollowNode(Node):
             print("start COOKIE FOLLOWING")
  
     def scan_callback(self, msg):
-        """
-        Processes incoming laser scan messages to find the cookie, counts cookies found and eaten,
-        and commands (desired vel) the neato to follow it when active.
-        args:
+        """Processes incoming laser scan messages to find the cookie and follow it.
+
+        Counts cookies found and eaten, and commands (desired vel) the neato to
+        follow the cookie when active.
+
+        Args:
             msg (LaserScan): The incoming laser scan message containing range data.
-        returns: None
         """
         # on scan, we do the find and only if active, do we drive after finding
         # iterate through all points from lidar scan and convert to cartesian
@@ -230,18 +230,20 @@ class CookieFollowNode(Node):
  
     def get_circle_from_3_points(self, p1, p2, p3):
         """Calculates the circumcircle of three 2D points.
-        args:
+
+        Args:
             p1 (tuple): The first cartesian coordinate (x, y).
             p2 (tuple): The second cartesian coordinate (x, y).
             p3 (tuple): The third cartesian coordinate (x, y).
-        returns:
+
+        Returns:
             tuple: (cx, cy, radius) of the circumcircle, or (None, None, None) if points are nearly collinear.
         """
         x1, y1 = p1
         x2, y2 = p2
         x3, y3 = p3
  
-        # D is twice the triangle area. goes to 0 if points form a line
+        # D is four times the triangle area. goes to 0 if points form a line
         D = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
  
         # prevent flat walls from generating massive circles
@@ -259,6 +261,7 @@ class CookieFollowNode(Node):
  
  
 def main(args=None):
+    """Runs the node and sends a zero velocity on shutdown."""
     rclpy.init(args=args)
     node = CookieFollowNode()
     try:
