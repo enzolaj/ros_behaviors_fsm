@@ -8,7 +8,7 @@ from rclpy.qos import qos_profile_sensor_data
 
 from geometry_msgs.msg import Twist, Point, PointStamped
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import ColorRGBA, Float32MultiArray, String
+from std_msgs.msg import ColorRGBA, Float32MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from tf2_ros import Buffer, TransformListener, TransformException
 from tf2_geometry_msgs import do_transform_point
@@ -23,7 +23,6 @@ class WallFollowerNode(Node):
     def __init__(self):
         """Initializes node; sets subscribers and publishers; and triangulation and collision 
         avoidance parameters."""
-
         super().__init__("wall_following")
         self.forward_speed = 0.2 # m/s
         self.target_distance = 0.3 # meters to stay away from the wall
@@ -31,51 +30,29 @@ class WallFollowerNode(Node):
         self.max_turn = 1.0 # rad/s
         self.max_dist_error = 0.5 # m
 
+        self.a_index = None # 0-361
+        self.b_index = None # 0-361
+        self.a = None # m
+        self.b = None # m
+
         # control values
         self.p_dist = 1.5   
         self.damping_ratio = 1 # add margins for lag?
         # critical damping: p_angle = 2 * zeta * sqrt(v * p_dist)
         self.p_angle = 2.0 * self.damping_ratio * math.sqrt(
             self.forward_speed * self.p_dist) 
-        self.get_logger().info(
-            f"p_dist={self.p_dist:.2f}, p_angle={self.p_angle:.2f} "
-            f"(zeta={self.damping_ratio})")
 
-        self.fixed_frame = "base_link" # frame where hit point trail is stored
+        self.fixed_frame = "odom" # frame where hit point trail is stored
         self.hit_history = deque(maxlen=200)  # oldest points drop off automatically
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.marker_pub = self.create_publisher(MarkerArray, "wall_markers", 10)
-        # [dist_error, alpha, steer_before_clamp] for plotting from a bag
-        self.debug_pub = self.create_publisher(Float32MultiArray, "wall_debug", 10)
 
         self.cmd_vel_pub = self.create_publisher(Twist, "desired_cmd_vel", 10)
 
         self.create_subscription(LaserScan, "scan", self.scan_callback, qos_profile_sensor_data)
-        self.state_sub = self.create_subscription(
-            String, "state", self.state_callback, 10
-        )
 
-        # Track active behavior state
-        self.is_active = False
-
-    def state_callback(self, msg):
-        """Determines if point within sensor's range. False for 0, inf, and NaN.
-        
-        Args: 
-            range_index (float): Index of lidar scan
-            msg (string): Incoming state message
-
-        Return:
-            Boolean: Whether or not the lidar scan straight ahead shows that a 
-            wall is ahead (distance is below target_distance threshold).
-        """
-        was_active = self.is_active
-        self.is_active = msg.data == "WALL_FOLLOWING"
-
-        if self.is_active and not was_active:
-            print("start WALL_FOLLOWING")
 
     @staticmethod
     def valid_point(range_index, msg):
@@ -102,13 +79,13 @@ class WallFollowerNode(Node):
             Boolean
         """
         x = msg.ranges[0]
-        if x > 4 * self.target_distance:
+        if x > 4*self.target_distance:
             pass
         else:
             return True
 
         
-    def scan_callback(self, msg):
+    def scan_callback(self, msg):    
         """Updates command velocity.
         
         Args: 
@@ -116,71 +93,68 @@ class WallFollowerNode(Node):
             
         Return: 
             None
-        """    
-        # Do not run or publish commands if we are not the active state
-        if not self.is_active:
-            return
-
+        """        
         cmd = Twist()
         cmd.linear.x = self.forward_speed
 
-        # 270 = right. 290 = 20deg above right
-        b = msg.ranges[270]  
-        a = msg.ranges[290]  
+        # Following right: 270 = right. 290 = 20deg above right
+        # Following left: 90 = left. 70 = 20deg above left
+        self.b_index = 180 - (self.side * 90)
+        self.a_index = self.b_index + (self.side * 20)
+
+        self.b = msg.ranges[self.b_index]  
+        self.a = msg.ranges[self.a_index]  
         
         # just drive straight if there is no valid point
-        if not (self.valid_point(a, msg) and self.valid_point(b, msg)):
+        if not (self.valid_point(self.a, msg) and self.valid_point(self.b, msg)):
             cmd.angular.z = 0.0
             self.cmd_vel_pub.publish(cmd)
-            return cmd
+            pass
 
         theta = math.radians(20) # hardcoded based on a,b
         
         # angle of the wall relative to the robot (alpha)
-        numerator = a * math.cos(theta) - b
-        denominator = a * math.sin(theta)
+        numerator = self.a * math.cos(theta) - self.b
+        denominator = self.a * math.sin(theta)
         alpha = math.atan2(numerator, denominator)
         
         # perpendicular distance to the wall
-        current_distance = b * math.cos(alpha)
+        current_distance = self.b * math.cos(alpha)
         
         # find how much we're off from target distance
         dist_error = current_distance - self.target_distance
         capped_error = max(-self.max_dist_error, min(self.max_dist_error, dist_error))
         # -1 multiplier because the wall is on the right, make not hardcoded later
-        steer = -1.0 * (self.p_dist * capped_error + self.p_angle * alpha)
+        steer = self.side * (self.p_dist * capped_error + self.p_angle * alpha)
 
-        # turn if wall ahead 
+        # turn if wall ahead (assuming we're following on the right)
         if self.wall_ahead(msg):
-            cmd.angular.z = -1.0 * self.side
+            cmd.angular.z = self.side * -1.0
         # else, clamp the turn speed
         else:
             cmd.angular.z = max(-self.max_turn, min(self.max_turn, steer))
 
-
         self.cmd_vel_pub.publish(cmd)
 
-        self.debug_pub.publish(
-            Float32MultiArray(data=[dist_error, alpha, steer]))
         self.publish_markers(msg.header.frame_id,
-                            self.polar_to_point(b, 270),
-                            self.polar_to_point(a, 290))
+                            self.polar_to_point(self.b, self.b_index),
+                            self.polar_to_point(self.a, self.a_index))
 
 
     @staticmethod
-    def polar_to_point(range_index, angle): 
+    def polar_to_point(range_index, angle):
         """Transform points from polar to cartesian.
         
         Args:
             range_index (float): Index of lidar scan
             angle (int): Angle of lidar scan in degrees
         """ 
-        return Point(x = range_index * math.cos(math.radians(angle)),
-                     y = range_index * math.sin(math.radians(angle)),
+
+        return Point(x = -1.0* range_index * math.cos(math.radians(angle)),
+                     y = -1.0* range_index * math.sin(math.radians(angle)),
                      z = 0.0)
 
 
-# LLMs were used to write the framework for these visualization functions. Debugging and revisions were done on our own. 
     @staticmethod
     def marker(frame, marker_id, marker_type):
         """Making marker with necessary fields, rest is filled in with caller."""
