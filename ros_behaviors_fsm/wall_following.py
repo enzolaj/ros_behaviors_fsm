@@ -1,3 +1,10 @@
+"""
+Follows a wall on the Neato's right or left side using lidar data.
+
+Active only in the WALL_FOLLOWING state. A controller on distance
+and heading error keeps the robot parallel to the wall, and a forward check
+triggers a turn at corners.
+"""
 import math
 
 import rclpy
