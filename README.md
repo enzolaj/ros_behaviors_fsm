@@ -222,8 +222,10 @@ A binary trigger was used to determine if the distance from the wall was under a
 
 #### 2.2.4 Visuals & Demonstration
 
-[Figure, GIF, or embedded video demonstrating the
-behavior, along with a link to the relevant `rosbag` file.]
+<p align="center">
+  <img src="docs/wall_follow.gif" alt="Figure 2: The wall-following behavior sped up 3x. Note the visualized wall triangle and history of wall points.">
+</p>
+<p align="center"><em>Figure 2: The wall-following behavior sped up 3x. Note the visualized wall triangle and history of wall points.</em></p>
 
 ### <a name="cookie-following" id="cookie-following"></a>2.3 Cookie Following
 
@@ -352,9 +354,9 @@ For velocity control, a simple fix would have been to scale the linear speed by 
 Overall, many of these issues stem from small oversights in our planning phase and, given more time, could have been addressed for a more stable project.
 
 <p align="center">
-  <img src="docs/cookiefollow.gif" alt="Figure 2: The cookie-following behavior sped up 3x. Note the translucent red circle representing the cookie fitted to the surface of the arc.">
+  <img src="docs/cookiefollow.gif" alt="Figure 3: The cookie-following behavior sped up 3x. Note the translucent red circle representing the cookie fitted to the surface of the arc.">
 </p>
-<p align="center"><em>Figure 2: The cookie-following behavior sped up 3x. Note the translucent red circle representing the cookie fitted to the surface of the arc.</em></p>
+<p align="center"><em>Figure 3: The cookie-following behavior sped up 3x. Note the translucent red circle representing the cookie fitted to the surface of the arc.</em></p>
 
 ### <a name="collision-avoidance" id="collision-avoidance"></a>2.4 Collision Avoidance / Safety E-Stop
 
