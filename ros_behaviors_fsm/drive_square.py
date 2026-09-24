@@ -1,3 +1,10 @@
+"""
+Drives the Neato in a single square using timed open-loop commands.
+
+Active only in the SQUARE_DRIVE state. Each corner is a timed turn and each
+side is a timed drive. After four sides, the node publishes on
+drive_square_done so the state machine can move to WALL_FOLLOWING.
+"""
 import math
 
 import rclpy
