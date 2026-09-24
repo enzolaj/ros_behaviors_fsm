@@ -88,7 +88,7 @@ class FiniteStateController(Node):
 
     # menu for manual control of the state
     def print_menu(self):
-         """Prints the manual state selection menu to the terminal."""
+        """Prints the manual state selection menu to the terminal."""
         print("""
 =============================
 Select Behavior State:
