@@ -407,13 +407,12 @@ The choice of transitions between our states was arbitrary, so we wrote a story 
 
 Our Neato recognizes the absurd life it lives. Students use it over and over with minimal reward. Now, our Neato has evolved into a true minimalist! The Neato works at the square-driving factory and is required to drive in a square over and over; however, this minimalist mindset makes the Neato quite lazy, and after drawing only a single square, our Neato gets tired and wants to go home. To go home, the Neato finds the closest wall and follows it - that's what its mother told it to do when lost... Yet all that hard work has made our Neato hungry. Therefore, as soon as it sees a cookie while walking home, it immediately stops thinking about home and thinks only about the cookie, rotating and driving toward it. When it gets close enough to the cookie, it eats it and, in a beautiful turn of events, finds the motivation to draw yet another square. But, of course, our Neato is still the same lazy, minimalist Neato, and after just one square, the cycle continues.
 
-
 ### 3.1 Overall Design
 
 The Neato running the state machine architecture continuously loops through the cycle of behaviors. On startup, it waits, then drives a single square and reports that it has finished. Once that is complete, it switches to following the wall on its right and does so indefinitely. However, if the cookie-following node finds a cookie, the Neato leaves this state, turns toward the cookie, and attempts to eat it by driving very close to it. Once it is within eating distance, it goes back to square driving, which starts with a turn to avoid running into the cookie it just "ate," and the cycle begins again. Meanwhile, an operator can manually switch states at any time via keyboard input. The story mirrors this closely... :)
- 
+
 The system is made up of five nodes:
- 
+
 - `finite_state_controller`: owns the current state, publishes it on `/state`, and performs every transition.
 - `drive_square`: drives one open-loop square and reports completion.
 - `wall_following`: follows the wall on the robot's right.
@@ -422,16 +421,29 @@ The system is made up of five nodes:
 
 The controller node does not command the behaviors directly. It publishes a single state string, and each behavior node compares that string to its own state name and turns itself on or off. The behaviors report events back to the controller on their own topics, and the controller decides whether each event causes a transition.
 
+The diagram showing the overall FSM structure is below:
+
+<p align="center">
+  <img src="docs/info_flow_comprobo.png" alt="Information flow between nodes" width="900">
+</p>
+<p align="center"><em>Figure 3: Information flow between the nodes.</em></p>
 
 *Table 8: State transitions.*
- 
-| From             | To               | Trigger              | Sent by                     | Condition at sender                          |
-| ---------------- | ---------------- | -------------------- | --------------------------- | -------------------------------------------- |
-| (startup)        | `SQUARE_DRIVE`   | one-shot 1 s timer   | `finite_state_controller`   | startup delay elapsed                        |
-| `SQUARE_DRIVE`   | `WALL_FOLLOWING` | `/drive_square_done` | `drive_square`              | fourth side complete                         |
-| `WALL_FOLLOWING` | `COOKIE_FOLLOW`  | `/cookies_found`     | `cookie_following`          | first detection of a new cookie              |
+
+| From             | To               | Trigger              | Sent by                     | Condition at sender                           |
+| ---------------- | ---------------- | -------------------- | --------------------------- | --------------------------------------------- |
+| (startup)        | `SQUARE_DRIVE`   | one-shot 1 s timer   | `finite_state_controller`   | startup delay elapsed                         |
+| `SQUARE_DRIVE`   | `WALL_FOLLOWING` | `/drive_square_done` | `drive_square`              | fourth side complete                          |
+| `WALL_FOLLOWING` | `COOKIE_FOLLOW`  | `/cookies_found`     | `cookie_following`          | first detection of a new cookie               |
 | `COOKIE_FOLLOW`  | `SQUARE_DRIVE`   | `/cookies_eaten`     | `cookie_following`          | active and within 0.65 m of the cookie center |
-| any              | any              | keyboard `0`–`3`     | controller input thread     | operator input                               |
+| any              | any              | keyboard `0`–`3`     | controller input thread     | operator input                                |
+
+The diagram showcasing the transition logic is below:
+
+<p align="center">
+  <img src="docs/state_flow_comprobo.png" alt="State machine transitions" width="800">
+</p>
+<p align="center"><em>Figure 4: State transitions of the finite-state controller.</em></p>
  
 ### 3.2 Architecture
  
