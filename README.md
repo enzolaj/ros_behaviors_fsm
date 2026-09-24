@@ -4,7 +4,7 @@ Author Names: Jack W., Enzo S., Irene H.
 
 For Olin ENGR3590 Computational Introduction to Robotics
 
-This README is a comprehensive report that contains both conceptual and programmatic  information regarding implementation details of our Lazy Neato project.
+This README is a comprehensive report that contains both conceptual and programmatic  information regarding implementation details of our Lazy Neato project. For clarity, the parameters detailed below were from our initial testing; however, for certain gifs and bag recordings, we modified them to better show the individual behavior. 
 
 ## 1. Project Overview
 
@@ -479,6 +479,12 @@ The keyboard menu runs in a separate thread started in the arbiter. `terminal_in
 As mentioned in the individual behavior sections, our state machine has many limitations and unhandled edge cases. The controller has no way out of `COOKIE_FOLLOW` except eating a cookie. If the cookie is lost, the cookie-following node stops publishing velocity, and the robot sits still until a cookie reappears or an operator changes the state from the keyboard. Because the found event fires only at the start of a new track, a cookie first seen while the robot is still drawing its square is ignored by the controller and never triggers a transition later, even if it stays in view during wall following.
  
 Additionally, the 1 s startup delay is a guess and has not been verified. If the delay were too short for the subscribers to connect, they would miss the initial state, and the state machine would never start cycling.
+
+### 3.5 Demonstration
+<p align="center">
+  <img src="docs/fsm.gif" alt="Figure 4: The FSM cyclical behavior sped up 3x. Note it contains both visualization. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.">
+</p>
+<p align="center"><em>Figure 4: The FSM cyclical behavior sped up 3x. Note it contains both visualization. One issue is the random cookie that can be seen during square drive due to RANSAC sensitivity; despite this, it finished a full cycle from square drive back to square drive.</em></p>
 
 ## 4. Learning Objectives and Final Takeaways
 
